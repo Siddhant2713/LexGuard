@@ -1,0 +1,55 @@
+# ─── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+venv/
+*.egg
+
+# ─── Secrets — NEVER commit these ────────────────────────────────────────────
+backend/.env
+frontend/.env.local
+lexguard-941ae-firebase-adminsdk-fbsvc-204390457b.json
+*.json
+!package.json
+!tsconfig.json
+!next.config.json
+!tailwind.config.js
+!postcss.config.js
+!postcss.config.mjs
+service_account*.json
+firebase*.json
+*credentials*.json
+*secret*.json
+
+# ─── ChromaDB data (runtime, not source) ─────────────────────────────────────
+chroma_data/
+backend/chroma_data/
+
+# ─── Node ─────────────────────────────────────────────────────────────────────
+node_modules/
+.next/
+frontend/.next/
+frontend/out/
+
+# ─── OS / Editor ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ─── Logs ────────────────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+
+# ─── Dev-only mock data (never commit) ──────────────────────────────────────
+backend/mock_data.py
+
+# ─── Uploads (runtime) ───────────────────────────────────────────────────────
+uploads/
+tmp/

@@ -1,0 +1,17 @@
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+python-multipart==0.0.12
+pymupdf==1.24.11
+python-docx==1.1.2
+pytesseract==0.3.13
+Pillow>=10.0.0
+sentence-transformers==3.3.0
+chromadb==0.5.20
+numpy>=1.26.4,<2.0.0
+google-genai==1.15.0
+firebase-admin==6.5.0
+google-cloud-firestore==2.19.0
+pydantic==2.9.0
+python-dotenv==1.0.1
+# httpx version resolved automatically — google-genai needs >=0.28.1, chromadb needs >=0.27.0
+httpx>=0.28.1,<1.0.0

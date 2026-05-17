@@ -1,0 +1,181 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Design Tokens — Warm Editorial Theme ───────────────────────────────── */
+:root {
+  /* Backgrounds — parchment + warm charcoal scale */
+  --bg-0: #F7F5F0;   /* main canvas — warm parchment */
+  --bg-1: #F0EDE6;   /* subtle panel surface */
+  --bg-2: #E8E4DC;   /* hover / selected */
+  --bg-3: #DDD8CE;   /* active / pressed */
+
+  /* Borders — warm, hair-thin */
+  --border-0: #E2DDD4;
+  --border-1: #CFC9BD;
+  --border-2: #B8B0A0;
+
+  /* Text — warm ink scale */
+  --text-0: #1C1916;   /* near-black, warm */
+  --text-1: #635D54;   /* secondary warm gray */
+  --text-2: #9E9589;   /* muted warm */
+
+  /* Severity — muted, readable on parchment bg */
+  /* Critical → terracotta/rust */
+  --sev-critical-bg:     #FBF1EE;
+  --sev-critical-border: #C89080;
+  --sev-critical-text:   #9B3B28;
+  --sev-critical-glow:   rgba(155, 59, 40, 0.07);
+
+  /* High → amber/mustard */
+  --sev-high-bg:         #FBF6EC;
+  --sev-high-border:     #C8A055;
+  --sev-high-text:       #8A5C10;
+  --sev-high-glow:       rgba(138, 92, 16, 0.07);
+
+  /* Medium → sage/olive */
+  --sev-medium-bg:       #F3F7ED;
+  --sev-medium-border:   #92B065;
+  --sev-medium-text:     #4D6E25;
+  --sev-medium-glow:     rgba(77, 110, 37, 0.07);
+
+  /* Low → slate blue */
+  --sev-low-bg:          #EEF3F9;
+  --sev-low-border:      #7AAAC8;
+  --sev-low-text:        #2B6494;
+  --sev-low-glow:        rgba(43, 100, 148, 0.07);
+
+  /* Typography */
+  --font-serif: 'Instrument Serif', Georgia, serif;
+  --font-mono:  'Geist Mono', 'Fira Code', monospace;
+  --font-sans:  'Geist', -apple-system, sans-serif;
+
+  /* Easing */
+  --ease-out-expo: cubic-bezier(0.19, 1, 0.22, 1);
+  --ease-in-expo:  cubic-bezier(0.95, 0.05, 0.795, 0.035);
+  --dur-fast: 120ms;
+  --dur-base: 240ms;
+  --dur-slow: 400ms;
+}
+
+/* ─── Base Reset ──────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+body {
+  background: var(--bg-0);
+  color: var(--text-0);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Scrollbars ──────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-1); border-radius: 2px; }
+
+/* ─── Focus ───────────────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 1.5px solid var(--border-2);
+  outline-offset: 2px;
+}
+
+/* ─── Section Labels (replace ALL CAPS caps-label) ───────────────────────── */
+/* Use sentence-case + small tracking instead of uppercase shouting */
+.section-label {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+/* Legacy alias — kept so existing JSX still works */
+.caps-label {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  font-weight: 500;
+  color: var(--text-2);
+  /* Removed: text-transform uppercase — sentence case is calmer */
+}
+
+/* ─── Clause Sidebar Cards ────────────────────────────────────────────────── */
+.clause-card {
+  position: relative;
+  padding: 18px 20px 18px 24px;   /* more breathing room */
+  border-bottom: 1px solid var(--border-0);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out-expo);
+}
+.clause-card:hover  { background: var(--bg-1); }
+.clause-card.active { background: var(--bg-2); }
+
+/* ─── Red Flag Highlights ─────────────────────────────────────────────────── */
+mark.red-flag {
+  background: rgba(155, 59, 40, 0.10);
+  color: var(--sev-critical-text);
+  padding: 1px 2px;
+  border-radius: 2px;
+  font-weight: 500;
+}
+
+/* ─── Streaming Cursor ────────────────────────────────────────────────────── */
+.streaming-cursor::after {
+  content: '▋';
+  font-family: var(--font-mono);
+  color: var(--text-2);
+  animation: blink 0.9s step-end infinite;
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+/* ─── Chat Input ──────────────────────────────────────────────────────────── */
+.chat-textarea {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--border-0);
+  color: var(--text-0);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.6;
+  padding: 18px 20px;
+  resize: none;
+  outline: none;
+  min-height: 56px;
+  max-height: 120px;
+}
+.chat-textarea::placeholder { color: var(--text-2); }
+
+/* ─── Citation Tag ────────────────────────────────────────────────────────── */
+.citation-tag {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-2);
+  background: var(--bg-1);
+  border: 1px solid var(--border-1);
+  padding: 1px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: color var(--dur-fast), border-color var(--dur-fast);
+}
+.citation-tag:hover {
+  color: var(--text-1);
+  border-color: var(--border-2);
+}
+
+/* ─── Reduced Motion ──────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
