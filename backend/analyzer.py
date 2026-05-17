@@ -108,14 +108,16 @@ async def _call_gemini(
             )
             cleaned_text = _clean_json(response.text)
             
-            with open("debug_gemini.txt", "w") as f:
-                f.write(cleaned_text)
+            logger.debug("Gemini raw response (first 500 chars): %s", cleaned_text[:500])
                 
             # Validate JSON before returning to trigger retry if malformed
             json.loads(cleaned_text)
             return cleaned_text
         except Exception as e:
             err_str = str(e).lower()
+            if "invalidargument" in err_str or "400" in err_str:
+                logger.error(f"Non-retryable error: {e}")
+                raise e
             is_rate_limit = "429" in err_str or "quota" in err_str or "resource exhausted" in err_str
             is_json_error = isinstance(e, json.JSONDecodeError)
             if (is_rate_limit or is_json_error) and attempt < len(RETRY_DELAYS):
@@ -212,6 +214,22 @@ async def run_pass2(pass1_result: Pass1Result) -> list[RiskAnalysis]:
 
     # Filter out failed analyses
     valid = [r for r in results if r is not None]
+    
+    failed_count = len(results) - len(valid)
+    if failed_count > 0:
+        logger.error(f"Pass 2: {failed_count} clauses failed analysis")
+        valid.append(
+            RiskAnalysis(
+                clause_id="system_error",
+                severity="critical",
+                risk_type="Failed Analysis",
+                affects=["Unknown"],
+                plain_english=f"{failed_count} clauses failed to be analyzed due to system errors.",
+                consequence="If you sign this, you may be missing critical risk information.",
+                red_flags=[],
+                negotiation_tip="Review the document manually or try analyzing it again."
+            )
+        )
 
     # Sort by severity weight
     severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}

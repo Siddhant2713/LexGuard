@@ -28,6 +28,7 @@ export default function ClauseCard({ clause, isActive, onClick }: ClauseCardProp
       tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && onClick()}
       aria-selected={isActive}
+      aria-label={`${clause.risk_type} clause. Severity: ${sevLabel[clause.severity]}`}
     >
       {/* Left severity accent — soft, only on active */}
       <div
@@ -89,7 +90,7 @@ export default function ClauseCard({ clause, isActive, onClick }: ClauseCardProp
             borderRadius: "20px",
           }}
         >
-          {sevLabel[clause.severity]}
+          {clause.severity === 'critical' || clause.severity === 'high' ? '⚠ ' : clause.severity === 'medium' ? 'ℹ ' : ''}{sevLabel[clause.severity]}
         </span>
       </div>
     </div>

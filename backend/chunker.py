@@ -17,6 +17,7 @@ _SECTION_PATTERN = re.compile(
         (?:Article|Section|Clause)\s+\d+[\.\d]*[:\s]  # Article 1, Section 2.1:
         | (?:\d+\.)+\d*\s+[A-Z]                        # 1.1 Something
         | \d+\.\s+[A-Z][A-Za-z]                        # 1. Something
+        | (?:[IVXLCDM]+\.)\s+[A-Z]                     # Roman numeral: IV. Something
         | [A-Z][A-Z\s\-]{4,}(?=\n)                     # ALL CAPS HEADING
     )
     """,

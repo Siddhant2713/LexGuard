@@ -46,9 +46,10 @@ export async function analyzeContract(
 
 // ─── Report ────────────────────────────────────────────────────────────────
 
-export async function getReport(sessionId: string): Promise<ReportResponse> {
+export async function getReport(sessionId: string): Promise<ReportResponse | null> {
   const res = await fetch(`${API_URL}/report/${sessionId}`)
 
+  if (res.status === 404) return null;
   if (!res.ok) {
     throw new Error("Could not load report")
   }
@@ -82,13 +83,15 @@ export function streamChat(
 
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
+      let buffer = ""
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
 
-        const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split("\n")
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split("\n")
+        buffer = lines.pop() ?? ""
 
         for (const line of lines) {
           if (line.startsWith("data: ")) {

@@ -21,6 +21,12 @@ export default function WebGLBackground() {
 
       const canvas = canvasRef.current
       if (!canvas) return
+      
+      const gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl")
+      if (!gl) {
+        console.warn("WebGL not supported by browser/device. Background animation disabled.")
+        return
+      }
 
       // ── Renderer ──────────────────────────────────────────────────────────
       const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })

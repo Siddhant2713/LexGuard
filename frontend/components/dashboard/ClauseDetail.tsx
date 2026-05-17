@@ -6,6 +6,7 @@ import { severityColors, highlightRedFlags } from "@/lib/utils"
 
 interface ClauseDetailProps {
   clause: RiskAnalysis
+  suspicionScore?: number
   onCitationClick?: (clauseId: string) => void
 }
 
@@ -79,7 +80,7 @@ function RiskArc({ score }: { score: number }) {
   return <canvas ref={canvasRef} style={{ width: 60, height: 60, flexShrink: 0 }} />
 }
 
-export default function ClauseDetail({ clause }: ClauseDetailProps) {
+export default function ClauseDetail({ clause, suspicionScore }: ClauseDetailProps) {
   const colors = severityColors[clause.severity]
 
   return (
@@ -125,7 +126,7 @@ export default function ClauseDetail({ clause }: ClauseDetailProps) {
                 borderRadius: "20px",
               }}
             >
-              {sevLabel[clause.severity] ?? clause.severity}
+              {clause.severity === 'critical' || clause.severity === 'high' ? '⚠ ' : clause.severity === 'medium' ? 'ℹ ' : ''}{sevLabel[clause.severity] ?? clause.severity}
             </span>
             <span
               style={{
@@ -139,7 +140,7 @@ export default function ClauseDetail({ clause }: ClauseDetailProps) {
             </span>
           </div>
         </div>
-        <RiskArc score={clause.affects.length * 1.5 + 5} />
+        <RiskArc score={suspicionScore ?? 5.0} />
       </div>
 
       {/* ── Affects ── */}

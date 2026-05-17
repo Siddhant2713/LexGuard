@@ -28,6 +28,9 @@ def _get_model() -> SentenceTransformer:
 def _get_chroma() -> chromadb.PersistentClient:
     global _chroma_client
     if _chroma_client is None:
+        # Note: ChromaDB runs in-process with a local sqlite database. 
+        # It is NOT suitable for multi-container horizontal scaling in Cloud Run 
+        # unless deployed as a standalone client-server instance.
         _chroma_client = chromadb.PersistentClient(
             path=CHROMA_PERSIST_DIR,
             settings=chromadb.Settings(anonymized_telemetry=False)

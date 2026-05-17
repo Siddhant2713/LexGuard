@@ -34,7 +34,7 @@ export interface ParsedSegment {
  * Returns an array of text and citation segments for rendering.
  */
 export function parseCitations(text: string): ParsedSegment[] {
-  const regex = /\[\[CLAUSE:(\w+):([^\]]+)\]\]/g
+  const regex = /\[\[CLAUSE:([\w\-]+):([^\]]+)\]\]/g
   const segments: ParsedSegment[] = []
   let lastIndex = 0
   let match: RegExpExecArray | null

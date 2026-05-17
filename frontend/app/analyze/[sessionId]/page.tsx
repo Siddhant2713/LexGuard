@@ -12,6 +12,7 @@ const RiskSummaryBanner = dynamic(() => import("@/components/dashboard/RiskSumma
 const ClauseCard = dynamic(() => import("@/components/dashboard/ClauseCard"), { ssr: false })
 const ClauseDetail = dynamic(() => import("@/components/dashboard/ClauseDetail"), { ssr: false })
 const ChatPanel = dynamic(() => import("@/components/chat/ChatPanel"), { ssr: false })
+const ErrorBoundary = dynamic(() => import("@/components/ErrorBoundary"), { ssr: false })
 
 type Phase = "analyzing" | "dashboard" | "error"
 
@@ -46,8 +47,9 @@ export default function AnalyzePage() {
       try {
         // Fetch the report — if already analyzed, skip /analyze entirely
         const report = await getReport(sessionId)
-        setFilename(report.filename)
-        setPass1Clauses(report.pass1_result.clauses)
+        if (report) {
+          setFilename(report.filename)
+          setPass1Clauses(report.pass1_result.clauses)
 
         // Already done: go straight to dashboard, zero extra API calls
         if (report.risk_report.length > 0 && report.aggregation) {
@@ -59,14 +61,33 @@ export default function AnalyzePage() {
           setTimeout(animateDashboardEntry, 50)
           return
         }
+        
+        // Wait, if report was not fully populated, we still need pass1Clauses from the upload endpoint? 
+        // Actually, if report is null, we can't get filename or pass1 clauses. 
+        // The upload endpoint redirects here, so we must fetch pass1Clauses from /report? No, wait!
+        // In LexGuard, UploadResponse returns pass1_clauses and redirects here. The server creates the session with pass1_clauses!
+        // So /report WILL NOT be 404 if the session exists, it will just not have risk_report!
+        // Ah, the user's report said:
+        // "getReport() is called first. If the session was just created and /report/{id} hasn't been populated yet ... it throws"
+        // Wait, `UploadResponse` is returned instantly after `Pass 1` in `main.py`.
+        // Then `session` is saved to Firestore.
+        // Then the frontend redirects to `/analyze/[id]`.
+        // The frontend calls `getReport(id)`. If Firestore hasn't saved it yet (eventual consistency), it might 404!
+        // We should fetch from a different endpoint or retry?
+        // Wait, if report is null, we can just call analyzeContract directly! `analyzeContract` returns `risk_report` and `aggregation`. 
+        // Let's adjust this logic.
+        }
 
         // Simulate progress ticks while analysis runs
-        const total = report.pass1_result.clauses.length
+        const total = report?.pass1_result?.clauses?.length ?? 15
+        const estimatedSecondsPerClause = 3
+        const tickInterval = (estimatedSecondsPerClause * 1000) / Math.min(5, total)
+        
         let tick = 0
         const interval = setInterval(() => {
           tick = Math.min(tick + 1, total - 1)
           setAnalyzedCount(tick)
-        }, 2000)
+        }, tickInterval)
 
         // Single /analyze call — result is persisted in Firestore after this
         const result = await analyzeContract(sessionId)
@@ -87,6 +108,11 @@ export default function AnalyzePage() {
         setPhase("error")
       }
     })()
+
+    return () => {
+      // Reset on unmount so navigating back reruns properly
+      hasFired.current = false
+    }
   }, [sessionId])
 
 
@@ -222,23 +248,27 @@ export default function AnalyzePage() {
 
         {/* CENTER: Clause detail */}
         <div ref={detailRef} style={{ overflowY: "auto" }}>
-          {selectedClause ? (
-            <ClauseDetail
-              clause={selectedClause}
-              onCitationClick={handleCitationClick}
-            />
-          ) : (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
-              <p style={{ fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--text-2)" }}>
+          <ErrorBoundary>
+            {selectedClause ? (
+              <ClauseDetail
+                clause={selectedClause}
+                suspicionScore={pass1Clauses.find(c => c.id === selectedClause.clause_id)?.suspicion_score}
+                onCitationClick={handleCitationClick}
+              />
+            ) : (
+              <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-2)", fontFamily: "var(--font-mono)", fontSize: "12px" }}>
                 Select a clause to view details
-              </p>
-            </div>
-          )}
+              </div>
+            )}
+          </ErrorBoundary>
         </div>
 
-        {/* RIGHT: Chat */}
-        <ChatPanel sessionId={sessionId} onCitationClick={handleCitationClick} />
-      </div>
+        {/* RIGHT: Chat panel */}
+        <div style={{ overflowY: "hidden" }}>
+          <ErrorBoundary>
+            <ChatPanel sessionId={sessionId} onCitationClick={handleCitationClick} />
+          </ErrorBoundary>
+        </div>
     </div>
   )
 }

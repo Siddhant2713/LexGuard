@@ -19,7 +19,7 @@ def _get_db():
     global _db
     if _db is None:
         from google.cloud import firestore
-        _db = firestore.Client()
+        _db = firestore.AsyncClient()
     return _db
 
 
@@ -35,7 +35,7 @@ async def save_session(session: SessionState) -> None:
     db = _get_db()
     doc_ref = db.collection("sessions").document(session.session_id)
     data = session.model_dump(exclude={"raw_text", "chat_history"})
-    await asyncio.to_thread(doc_ref.set, data)
+    await doc_ref.set(data)
     logger.info(f"Saved session {session.session_id} to Firestore")
 
 
@@ -50,7 +50,7 @@ async def get_session(session_id: str) -> Optional[SessionState]:
         return SessionState(**data)
     db = _get_db()
     doc_ref = db.collection("sessions").document(session_id)
-    snap = await asyncio.to_thread(doc_ref.get)
+    snap = await doc_ref.get()
     if not snap.exists:
         return None
     data = snap.to_dict()
@@ -73,14 +73,11 @@ async def update_risk_report(
         return
     db = _get_db()
     doc_ref = db.collection("sessions").document(session_id)
-    await asyncio.to_thread(
-        doc_ref.update,
-        {
-            "risk_report": [r.model_dump() for r in risk_report],
-            "aggregation": aggregation.model_dump(),
-            "summary": summary,
-        },
-    )
+    await doc_ref.update({
+        "risk_report": [r if isinstance(r, dict) else r.model_dump() for r in risk_report],
+        "aggregation": aggregation if isinstance(aggregation, dict) else aggregation.model_dump(),
+        "summary": summary,
+    })
 
 
 # ─── Chat History ─────────────────────────────────────────────────────────────
@@ -97,9 +94,8 @@ async def save_chat_message(session_id: str, role: str, content: str) -> None:
         .document(session_id)
         .collection("chat")
     )
-    await asyncio.to_thread(
-        chat_ref.add,
-        {"role": role, "content": content, "timestamp": firestore.SERVER_TIMESTAMP},
+    await chat_ref.add(
+        {"role": role, "content": content, "timestamp": firestore.SERVER_TIMESTAMP}
     )
 
 
@@ -115,7 +111,9 @@ async def get_chat_history(session_id: str, limit: int = 20) -> list[dict]:
         .order_by("timestamp")
         .limit(limit)
     )
-    docs = await asyncio.to_thread(lambda: list(chat_ref.stream()))
+    docs = []
+    async for d in chat_ref.stream():
+        docs.append(d)
     return [
         {"role": d.to_dict()["role"], "content": d.to_dict()["content"]}
         for d in docs

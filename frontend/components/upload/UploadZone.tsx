@@ -154,6 +154,10 @@ export default function UploadZone({ onUploadStart, onUploadError }: UploadZoneP
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
           onClick={() => inputRef.current?.click()}
+          onKeyDown={(e) => e.key === "Enter" && inputRef.current?.click()}
+          role="button"
+          tabIndex={0}
+          aria-label="Upload document dropzone"
           style={{
             border: "1px dashed var(--border-0)",
             padding: "64px 80px",

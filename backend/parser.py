@@ -71,6 +71,13 @@ def extract_docx(docx_bytes: bytes) -> Tuple[str, dict]:
 
         doc = Document(_io.BytesIO(docx_bytes))
         paragraphs = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+        
+        for table in doc.tables:
+            for row in table.rows:
+                row_text = " | ".join(cell.text.strip() for cell in row.cells if cell.text.strip())
+                if row_text:
+                    paragraphs.append(row_text)
+
         raw_text = "\n\n".join(paragraphs)
 
         if len(raw_text.strip()) < 100:

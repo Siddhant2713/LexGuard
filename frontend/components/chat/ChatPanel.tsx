@@ -44,6 +44,13 @@ export default function ChatPanel({ sessionId, onCitationClick }: ChatPanelProps
     scrollToBottom()
   }, [messages])
 
+  useEffect(() => {
+    return () => {
+      // Abort any in-flight stream when panel unmounts
+      stopStreamRef.current?.()
+    }
+  }, [])
+
   const sendMessage = useCallback(async () => {
     const query = inputValue.trim()
     if (!query || isStreaming) return
@@ -266,6 +273,7 @@ export default function ChatPanel({ sessionId, onCitationClick }: ChatPanelProps
         <textarea
           ref={textareaRef}
           className="chat-textarea"
+          aria-label="Ask a question"
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={onKeyDown}

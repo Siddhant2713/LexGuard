@@ -8,9 +8,19 @@ load_dotenv()
 # Returns realistic hardcoded data. No API key required.
 DEMO_MODE: bool = os.environ.get("DEMO_MODE", "false").lower() == "true"
 
+ALLOWED_ORIGINS: list[str] = os.environ.get(
+    "ALLOWED_ORIGINS", "http://localhost:3000"
+).split(",")
+
 # --- AI ---
 # Not required when DEMO_MODE=true
-GEMINI_API_KEY: str = os.environ.get("GEMINI_API_KEY", "demo-key-not-used")
+_raw_key = os.environ.get("GEMINI_API_KEY", "")
+if not DEMO_MODE and not _raw_key:
+    raise EnvironmentError(
+        "GEMINI_API_KEY is required when DEMO_MODE=false. "
+        "Set it in backend/.env or as an environment variable."
+    )
+GEMINI_API_KEY: str = _raw_key or "demo-key-not-used"
 GEMINI_MODEL = "gemini-2.5-flash"
 GEMINI_CHAT_MODEL = "gemini-2.5-flash"
 
@@ -24,7 +34,9 @@ MAX_TOKENS_CHAT = 1024
 MAX_CLAUSES_PASS2 = 10
 PASS2_CONCURRENCY = 5
 FAISS_TOP_K = 3
-MAX_CONTEXT_CHARS = 100_000  # Gemini 1M context window
+# Cap characters to prevent massive payloads. Gemini 1.5+ supports 1M+ tokens, 
+# but 100k chars is enough for typical contracts and prevents memory spikes.
+MAX_CONTEXT_CHARS = 100_000
 
 # --- Embeddings ---
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"

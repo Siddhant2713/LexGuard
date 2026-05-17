@@ -101,7 +101,7 @@ body {
   letter-spacing: 0.04em;
   font-weight: 500;
   color: var(--text-2);
-  /* Removed: text-transform uppercase — sentence case is calmer */
+  text-transform: none; /* Removed: text-transform uppercase — sentence case is calmer */
 }
 
 /* ─── Clause Sidebar Cards ────────────────────────────────────────────────── */

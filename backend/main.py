@@ -2,7 +2,7 @@ import uuid
 import json
 import logging
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, Query
+from fastapi import FastAPI, UploadFile, File, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
@@ -27,7 +27,20 @@ from firestore_client import (
 )
 from storage_client import upload_contract
 
-logging.basicConfig(level=logging.INFO)
+class JsonFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        return json.dumps({
+            "severity": record.levelname,
+            "message": record.getMessage(),
+            "module": record.module,
+            "time": self.formatTime(record),
+        })
+
+handler = logging.StreamHandler()
+handler.setFormatter(JsonFormatter())
+logging.root.handlers = [handler]
+logging.root.setLevel(logging.INFO)
+
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
@@ -36,12 +49,34 @@ app = FastAPI(
     version="1.0.0",
 )
 
+from config import ALLOWED_ORIGINS
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "Authorization"],
 )
+
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+MAGIC_BYTES = {
+    b"%PDF": "application/pdf",
+    b"PK\x03\x04": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
+
+def _validate_file_magic(data: bytes, filename: str) -> None:
+    for magic, _ in MAGIC_BYTES.items():
+        if data[:len(magic)] == magic:
+            return
+    raise HTTPException(415, f"File content does not match declared type: {filename}")
 
 SUPPORTED_TYPES = {
     "application/pdf",
@@ -50,7 +85,26 @@ SUPPORTED_TYPES = {
 }
 
 
-# ─── Health ───────────────────────────────────────────────────────────────────
+import os
+import asyncio
+from config import DEMO_MODE
+
+@app.on_event("startup")
+async def startup_event():
+    # Pre-load sentence transformer for health checks
+    if not DEMO_MODE:
+        logger.info("Pre-loading sentence transformer model...")
+        from embedder import _get_model
+        await asyncio.to_thread(_get_model)
+        logger.info("Model loaded")
+        
+    # Validate Google credentials
+    if not DEMO_MODE:
+        creds_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
+        if creds_path and not os.path.exists(creds_path):
+            logger.error(f"GOOGLE_APPLICATION_CREDENTIALS path does not exist: {creds_path}")
+            raise RuntimeError(f"Invalid GOOGLE_APPLICATION_CREDENTIALS: {creds_path}")
+        logger.info("Google credentials validated")
 
 @app.get("/health")
 async def health():
@@ -60,7 +114,8 @@ async def health():
 # ─── Upload ───────────────────────────────────────────────────────────────────
 
 @app.post("/upload", response_model=UploadResponse)
-async def upload(file: UploadFile = File(...)):
+@limiter.limit("10/minute")
+async def upload(request: Request, file: UploadFile = File(...)):
     """
     Upload and parse a contract (PDF or DOCX).
     Runs Pass 1 (structural extraction) and returns clauses sorted by suspicion score.
@@ -73,6 +128,8 @@ async def upload(file: UploadFile = File(...)):
     file_bytes = await file.read()
     if len(file_bytes) > 20 * 1024 * 1024:  # 20 MB limit
         raise HTTPException(413, "File too large. Maximum size is 20MB.")
+        
+    _validate_file_magic(file_bytes, filename)
 
     # Parse document
     try:
@@ -82,7 +139,8 @@ async def upload(file: UploadFile = File(...)):
 
     # Chunk and build ChromaDB index
     chunks = split_clauses(raw_text)
-    build_index(session_id := str(uuid.uuid4()), chunks)
+    session_id = str(uuid.uuid4())
+    build_index(session_id, chunks)
 
     # Run Pass 1
     try:
@@ -132,7 +190,8 @@ async def upload(file: UploadFile = File(...)):
 # ─── Analyze ──────────────────────────────────────────────────────────────────
 
 @app.post("/analyze", response_model=AnalyzeResponse)
-async def analyze(session_id: str = Query(...)):
+@limiter.limit("5/minute")
+async def analyze(request: Request, session_id: str = Query(...)):
     """
     Run Pass 2 (per-clause risk analysis) and Pass 3 (aggregation).
     Returns the full risk report and overall contract risk profile.
@@ -160,14 +219,19 @@ async def analyze(session_id: str = Query(...)):
 
     # Build severity summary
     summary = {"critical": 0, "high": 0, "medium": 0, "low": 0}
-    for r in risk_report:
-        summary[r.severity] = summary.get(r.severity, 0) + 1
+    for clause in risk_report:
+        sev = clause.severity.value if hasattr(clause.severity, "value") else clause.severity
+        if sev in summary:
+            summary[sev] += 1
+            
+    session.risk_report = risk_report
+    session.aggregation = aggregation
+    session.summary = summary
 
-    # Persist to Firestore
     try:
-        await update_risk_report(session_id, risk_report, aggregation, summary)
+        await update_risk_report(session_id, risk_report, aggregation.model_dump(), summary)
     except Exception as e:
-        logger.warning(f"Firestore update failed (non-fatal): {e}")
+        logger.warning(f"Failed to persist risk report (non-fatal): {e}")
 
     return AnalyzeResponse(
         session_id=session_id,
