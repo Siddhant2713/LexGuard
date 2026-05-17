@@ -53,3 +53,14 @@ backend/mock_data.py
 # ─── Uploads (runtime) ───────────────────────────────────────────────────────
 uploads/
 tmp/
+
+# ─── Static / Test Documents & Artifacts ─────────────────────────────────────
+*.pdf
+*.docx
+*.doc
+*.txt
+!requirements.txt
+!robots.txt
+test_contracts/
+cached_reports/
+debug_*.txt

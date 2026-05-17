@@ -15,6 +15,9 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
 # Next.js telemetry disable
 ENV NEXT_TELEMETRY_DISABLED 1
 
