@@ -21,15 +21,18 @@ export default function WebGLBackground() {
 
       const canvas = canvasRef.current
       if (!canvas) return
-      
-      const gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl")
-      if (!gl) {
-        console.warn("WebGL not supported by browser/device. Background animation disabled.")
-        return
-      }
 
       // ── Renderer ──────────────────────────────────────────────────────────
-      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
+      // Do NOT call canvas.getContext("webgl") before this — it would claim
+      // the context and then Three.js would fail with "Canvas has an existing
+      // context of a different type". Let Three.js be the sole context creator.
+      let renderer: THREE.WebGLRenderer
+      try {
+        renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
+      } catch {
+        console.warn("WebGL not available — background animation disabled.")
+        return
+      }
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
       renderer.setSize(window.innerWidth, window.innerHeight)
 

@@ -1,10 +1,7 @@
 import asyncio
 import json
-import time
 import logging
-
-from google import genai
-from google.genai import types
+import re
 
 from config import (
     GEMINI_API_KEY,
@@ -25,21 +22,26 @@ from schemas import Pass1Result, RiskAnalysis, AggregationResult
 
 logger = logging.getLogger(__name__)
 
-# Only initialise the real client when not in demo mode
-_client = None if DEMO_MODE else genai.Client(api_key=GEMINI_API_KEY)
+# Lazy-loaded client — avoids crash on import if key is invalid
+_client = None
 
 
-
-def _json_config(max_tokens: int) -> types.GenerateContentConfig:
-    return types.GenerateContentConfig(
-        response_mime_type="application/json",
-        temperature=0.1,
-        max_output_tokens=max_tokens,
-    )
+def _get_client():
+    """Lazy-load Gemini client. Raises clear error if key is missing."""
+    global _client
+    if _client is None:
+        if DEMO_MODE:
+            return None
+        from google import genai
+        if not GEMINI_API_KEY or GEMINI_API_KEY == "demo-key-not-used":
+            raise ValueError(
+                "GEMINI_API_KEY is not set. Add it to backend/.env"
+            )
+        _client = genai.Client(api_key=GEMINI_API_KEY)
+    return _client
 
 
 def _strip_fences(text: str) -> str:
-    """Remove markdown code fences if Gemini adds them despite JSON mode."""
     text = text.strip()
     if text.startswith("```"):
         text = text.split("\n", 1)[-1]
@@ -49,41 +51,73 @@ def _strip_fences(text: str) -> str:
 
 
 def _clean_json(text: str) -> str:
-    """Fix common Gemini JSON quirks before parsing.
-    - Strips markdown fences
-    - Removes trailing commas before } or ] (invalid in strict JSON)
-    """
-    import re
+    """Fix common Gemini JSON quirks before parsing."""
     text = _strip_fences(text)
-    # Remove trailing commas: ,<whitespace>} or ,<whitespace>]
     text = re.sub(r",\s*([}\]])", r"\1", text)
-    return text
+    return text.strip()
 
 
-from typing import Any
+def _normalize_enum_fields(data: dict) -> dict:
+    """
+    Normalize enum values that Gemini might return in unexpected formats.
+    e.g. 'non-compete' -> 'non_compete', 'HIGH' -> 'high'
+    """
+    if isinstance(data, dict):
+        # Normalize category
+        if "category" in data:
+            cat = str(data["category"]).lower().replace("-", "_").replace(" ", "_")
+            valid_cats = {"employment", "ip", "privacy", "liability", "arbitration",
+                         "payment", "termination", "non_compete", "data", "other"}
+            data["category"] = cat if cat in valid_cats else "other"
+
+        # Normalize severity
+        if "severity" in data:
+            sev = str(data["severity"]).lower()
+            valid_sevs = {"critical", "high", "medium", "low"}
+            data["severity"] = sev if sev in valid_sevs else "medium"
+
+        # Normalize overall_risk
+        if "overall_risk" in data:
+            sev = str(data["overall_risk"]).lower()
+            valid_sevs = {"critical", "high", "medium", "low"}
+            data["overall_risk"] = sev if sev in valid_sevs else "medium"
+
+        # Recurse into lists
+        if "clauses" in data and isinstance(data["clauses"], list):
+            data["clauses"] = [_normalize_enum_fields(c) for c in data["clauses"]]
+
+    return data
+
 
 async def _call_gemini(
     system: str,
     user: str,
     max_tokens: int,
-    response_schema: Any = None,
 ) -> str:
     """
-    Call Gemini with retry on rate-limit (429) or JSON parse errors.
-    Runs synchronous SDK in a thread to avoid blocking the event loop.
+    Call Gemini with retry on rate-limit (429) or transient errors.
+    Does NOT use response_schema to avoid Pydantic enum validation issues.
     """
+    from google.genai import types
+
+    client = _get_client()
+
     for attempt, delay in enumerate([0] + RETRY_DELAYS):
         if delay:
+            logger.info(f"Waiting {delay}s before retry (attempt {attempt + 1})...")
             await asyncio.sleep(delay)
         try:
             response = await asyncio.to_thread(
-                _client.models.generate_content,
+                client.models.generate_content,
                 model=GEMINI_MODEL,
                 contents=user,
                 config=types.GenerateContentConfig(
                     system_instruction=system,
                     response_mime_type="application/json",
-                    response_schema=response_schema,
+                    # NOTE: Not using response_schema= here.
+                    # Passing Pydantic models with Enum fields as schema can cause
+                    # Gemini to return values that fail enum validation.
+                    # We validate manually after cleaning the JSON.
                     temperature=0.1,
                     max_output_tokens=max_tokens,
                     safety_settings=[
@@ -107,35 +141,35 @@ async def _call_gemini(
                 ),
             )
             cleaned_text = _clean_json(response.text)
-            
-            logger.debug("Gemini raw response (first 500 chars): %s", cleaned_text[:500])
-                
-            # Validate JSON before returning to trigger retry if malformed
-            json.loads(cleaned_text)
+            logger.debug("Gemini response (first 300 chars): %s", cleaned_text[:300])
+            json.loads(cleaned_text)  # Validate JSON before returning
             return cleaned_text
+
         except Exception as e:
             err_str = str(e).lower()
-            if "invalidargument" in err_str or "400" in err_str:
-                logger.error(f"Non-retryable error: {e}")
-                raise e
             is_rate_limit = "429" in err_str or "quota" in err_str or "resource exhausted" in err_str
+            is_server_error = "500" in err_str or "503" in err_str or "unavailable" in err_str
             is_json_error = isinstance(e, json.JSONDecodeError)
-            if (is_rate_limit or is_json_error) and attempt < len(RETRY_DELAYS):
-                logger.warning(f"Gemini error ({type(e).__name__}), retrying in {RETRY_DELAYS[attempt]}s...")
+            is_network_error = "name resolution" in err_str or "connection" in err_str or "errno" in err_str
+            is_retryable = is_rate_limit or is_server_error or is_json_error or is_network_error
+
+            if is_retryable and attempt < len(RETRY_DELAYS):
+                logger.warning(
+                    f"Retryable Gemini error ({type(e).__name__}: {str(e)[:100]}), "
+                    f"retrying in {RETRY_DELAYS[attempt]}s..."
+                )
                 continue
+
+            logger.error(f"Gemini call failed (non-retryable): {e}")
             raise
 
 
 # ─── Pass 1: Structural Extraction ───────────────────────────────────────────
 
 async def run_pass1(raw_text: str) -> Pass1Result:
-    """
-    Send the full document to Gemini for structural clause extraction.
-    Returns a sorted list of up to 15 clauses ranked by suspicion score.
-    """
     if DEMO_MODE:
         from mock_data import MOCK_PASS1
-        await asyncio.sleep(1.5)  # Simulate processing time
+        await asyncio.sleep(1.5)
         logger.info("DEMO_MODE: returning mock Pass 1 result")
         return MOCK_PASS1
 
@@ -144,7 +178,6 @@ async def run_pass1(raw_text: str) -> Pass1Result:
         system=PASS1_SYSTEM,
         user=PASS1_USER.format(document_text=doc_text),
         max_tokens=MAX_TOKENS_PASS1,
-        response_schema=Pass1Result,
     )
 
     try:
@@ -153,14 +186,18 @@ async def run_pass1(raw_text: str) -> Pass1Result:
         logger.error(f"Pass 1 JSON parse error: {e}\nRaw: {raw_json[:500]}")
         raise ValueError(f"Pass 1 returned invalid JSON: {e}")
 
-    # Sort descending by suspicion_score, cap at 15
+    data = _normalize_enum_fields(data)
     data["clauses"] = sorted(
         data.get("clauses", []),
         key=lambda x: x.get("suspicion_score", 0),
         reverse=True,
     )[:15]
 
-    return Pass1Result(**data)
+    try:
+        return Pass1Result(**data)
+    except Exception as e:
+        logger.error(f"Pass1Result validation failed: {e}\nData: {str(data)[:500]}")
+        raise ValueError(f"Pass 1 schema validation failed: {e}")
 
 
 # ─── Pass 2: Per-Clause Risk Analysis ────────────────────────────────────────
@@ -170,7 +207,6 @@ async def _analyze_single_clause(
     doc_type: str,
     semaphore: asyncio.Semaphore,
 ) -> RiskAnalysis | None:
-    """Analyze a single clause under the concurrency semaphore."""
     async with semaphore:
         try:
             raw_json = await _call_gemini(
@@ -179,13 +215,13 @@ async def _analyze_single_clause(
                     document_type=doc_type,
                     clause_id=clause["id"],
                     heading=clause["heading"],
-                    category=clause["category"],
+                    category=clause.get("category", "other"),
                     clause_text=clause["text"],
                 ),
                 max_tokens=MAX_TOKENS_PASS2,
-                response_schema=RiskAnalysis,
             )
             data = json.loads(raw_json)
+            data = _normalize_enum_fields(data)
             return RiskAnalysis(**data)
         except Exception as e:
             logger.error(f"Pass 2 failed for clause {clause.get('id')}: {e}")
@@ -193,13 +229,9 @@ async def _analyze_single_clause(
 
 
 async def run_pass2(pass1_result: Pass1Result) -> list[RiskAnalysis]:
-    """
-    Run Pass 2 on the top N clauses concurrently (semaphore-limited).
-    Returns results sorted by severity weight.
-    """
     if DEMO_MODE:
         from mock_data import MOCK_RISK_REPORT
-        await asyncio.sleep(3.0)  # Simulate analysis time for progress UX
+        await asyncio.sleep(3.0)
         logger.info("DEMO_MODE: returning mock risk report")
         return MOCK_RISK_REPORT
 
@@ -211,29 +243,20 @@ async def run_pass2(pass1_result: Pass1Result) -> list[RiskAnalysis]:
         for clause in clauses
     ]
     results = await asyncio.gather(*tasks)
-
-    # Filter out failed analyses
     valid = [r for r in results if r is not None]
-    
     failed_count = len(results) - len(valid)
+
     if failed_count > 0:
-        logger.error(f"Pass 2: {failed_count} clauses failed analysis")
-        valid.append(
-            RiskAnalysis(
-                clause_id="system_error",
-                severity="critical",
-                risk_type="Failed Analysis",
-                affects=["Unknown"],
-                plain_english=f"{failed_count} clauses failed to be analyzed due to system errors.",
-                consequence="If you sign this, you may be missing critical risk information.",
-                red_flags=[],
-                negotiation_tip="Review the document manually or try analyzing it again."
-            )
+        logger.error(f"Pass 2: {failed_count}/{len(results)} clause analyses failed")
+
+    if not valid:
+        raise ValueError(
+            "All clause analyses failed. Check your GEMINI_API_KEY and model quota. "
+            "Try setting DEMO_MODE=true to test without an API key."
         )
 
-    # Sort by severity weight
     severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-    return sorted(valid, key=lambda x: severity_order.get(x.severity, 4))
+    return sorted(valid, key=lambda x: severity_order.get(str(x.severity), 4))
 
 
 # ─── Pass 3: Risk Aggregation ─────────────────────────────────────────────────
@@ -242,17 +265,15 @@ async def run_aggregation(
     risk_report: list[RiskAnalysis],
     doc_type: str,
 ) -> AggregationResult:
-    """
-    Produce an overall contract risk profile from the full risk report.
-    """
     if DEMO_MODE:
         from mock_data import MOCK_AGGREGATION
         await asyncio.sleep(0.5)
         logger.info("DEMO_MODE: returning mock aggregation")
         return MOCK_AGGREGATION
+
     clauses_summary = [
         {
-            "severity": r.severity,
+            "severity": str(r.severity),
             "risk_type": r.risk_type,
             "affects": r.affects,
             "plain_english": r.plain_english,
@@ -267,13 +288,17 @@ async def run_aggregation(
             clauses_json=json.dumps(clauses_summary, indent=2),
         ),
         max_tokens=MAX_TOKENS_AGGREGATION,
-        response_schema=AggregationResult,
     )
 
     try:
         data = json.loads(raw_json)
+        data = _normalize_enum_fields(data)
     except json.JSONDecodeError as e:
         logger.error(f"Aggregation JSON parse error: {e}")
         raise ValueError(f"Aggregation returned invalid JSON: {e}")
 
-    return AggregationResult(**data)
+    try:
+        return AggregationResult(**data)
+    except Exception as e:
+        logger.error(f"AggregationResult validation failed: {e}")
+        raise ValueError(f"Aggregation schema validation failed: {e}")

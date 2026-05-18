@@ -38,62 +38,60 @@ export default function AnalyzePage() {
   // Without this, two concurrent /analyze calls would fire on every page load.
   const hasFired = useRef(false)
 
+  // Match this to PASS2_CONCURRENCY in backend config for realistic progress timing
+  const PASS2_CONCURRENCY_HINT = 2
+
   useEffect(() => {
     if (!sessionId) return
-    if (hasFired.current) return   // ← StrictMode safety: only run once
+    if (hasFired.current) return
     hasFired.current = true
 
     ;(async () => {
       try {
-        // Fetch the report — if already analyzed, skip /analyze entirely
         const report = await getReport(sessionId)
+
         if (report) {
+          // Session exists — populate state from report
           setFilename(report.filename)
           setPass1Clauses(report.pass1_result.clauses)
 
-        // Already done: go straight to dashboard, zero extra API calls
-        if (report.risk_report.length > 0 && report.aggregation) {
-          setRiskReport(report.risk_report)
-          setAggregation(report.aggregation)
-          setSummary(report.summary)
-          setSelectedId(report.risk_report[0]?.clause_id ?? null)
-          setPhase("dashboard")
-          setTimeout(animateDashboardEntry, 50)
-          return
-        }
-        
-        // Wait, if report was not fully populated, we still need pass1Clauses from the upload endpoint? 
-        // Actually, if report is null, we can't get filename or pass1 clauses. 
-        // The upload endpoint redirects here, so we must fetch pass1Clauses from /report? No, wait!
-        // In LexGuard, UploadResponse returns pass1_clauses and redirects here. The server creates the session with pass1_clauses!
-        // So /report WILL NOT be 404 if the session exists, it will just not have risk_report!
-        // Ah, the user's report said:
-        // "getReport() is called first. If the session was just created and /report/{id} hasn't been populated yet ... it throws"
-        // Wait, `UploadResponse` is returned instantly after `Pass 1` in `main.py`.
-        // Then `session` is saved to Firestore.
-        // Then the frontend redirects to `/analyze/[id]`.
-        // The frontend calls `getReport(id)`. If Firestore hasn't saved it yet (eventual consistency), it might 404!
-        // We should fetch from a different endpoint or retry?
-        // Wait, if report is null, we can just call analyzeContract directly! `analyzeContract` returns `risk_report` and `aggregation`. 
-        // Let's adjust this logic.
+          // Already fully analyzed — skip straight to dashboard
+          if (report.risk_report.length > 0 && report.aggregation) {
+            setRiskReport(report.risk_report)
+            setAggregation(report.aggregation)
+            setSummary(report.summary as Record<Severity, number>)
+            setSelectedId(report.risk_report[0]?.clause_id ?? null)
+            setPhase("dashboard")
+            setTimeout(animateDashboardEntry, 50)
+            return
+          }
+        } else {
+          // Session not in Firestore yet (race condition) OR in-memory only.
+          // We still need to run /analyze — it will work because the backend
+          // now keeps sessions in-memory as the primary store.
+          // Show a minimal progress indicator without clause list.
+          setFilename("Analyzing…")
         }
 
-        // Simulate progress ticks while analysis runs
-        const total = report?.pass1_result?.clauses?.length ?? 15
-        const estimatedSecondsPerClause = 3
-        const tickInterval = (estimatedSecondsPerClause * 1000) / Math.min(5, total)
-        
+        // Run the analysis (session exists in backend memory even if getReport was null)
+        const total = report?.pass1_result?.clauses?.length ?? 10
+        const estimatedSecondsPerClause = 4  // longer for free tier rate limits
+        const tickInterval = Math.max(
+          (estimatedSecondsPerClause * 1000) / Math.min(PASS2_CONCURRENCY_HINT, total),
+          2000
+        )
+
         let tick = 0
         const interval = setInterval(() => {
           tick = Math.min(tick + 1, total - 1)
           setAnalyzedCount(tick)
         }, tickInterval)
 
-        // Single /analyze call — result is persisted in Firestore after this
         const result = await analyzeContract(sessionId)
         clearInterval(interval)
         setAnalyzedCount(total)
 
+        if (report) setFilename(report.filename)  // ensure filename is set
         setRiskReport(result.risk_report)
         setAggregation(result.aggregation)
         setSummary(result.summary)
@@ -110,7 +108,6 @@ export default function AnalyzePage() {
     })()
 
     return () => {
-      // Reset on unmount so navigating back reruns properly
       hasFired.current = false
     }
   }, [sessionId])

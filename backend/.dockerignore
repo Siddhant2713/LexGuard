@@ -12,3 +12,4 @@ debug_gemini.txt
 .pytest_cache/
 pytest.ini
 tests/
+chroma_data/
