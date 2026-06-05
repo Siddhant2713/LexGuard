@@ -39,7 +39,7 @@ export default function AnalyzePage() {
   const hasFired = useRef(false)
 
   // Match this to PASS2_CONCURRENCY in backend config for realistic progress timing
-  const PASS2_CONCURRENCY_HINT = 2
+  const PASS2_CONCURRENCY_HINT = 3
 
   useEffect(() => {
     if (!sessionId) return
@@ -108,7 +108,8 @@ export default function AnalyzePage() {
     })()
 
     return () => {
-      hasFired.current = false
+      // Do NOT reset hasFired here — resetting in cleanup defeats the StrictMode guard.
+      // Once fired, the ref stays true for the lifetime of this page instance.
     }
   }, [sessionId])
 
@@ -266,6 +267,7 @@ export default function AnalyzePage() {
             <ChatPanel sessionId={sessionId} onCitationClick={handleCitationClick} />
           </ErrorBoundary>
         </div>
+      </div>
     </div>
   )
 }

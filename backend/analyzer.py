@@ -4,8 +4,8 @@ import logging
 import re
 
 from config import (
-    GEMINI_API_KEY,
-    GEMINI_MODEL,
+    GROQ_API_KEY,
+    GROQ_MODEL,
     DEMO_MODE,
     MAX_TOKENS_PASS1,
     MAX_TOKENS_PASS2,
@@ -27,17 +27,17 @@ _client = None
 
 
 def _get_client():
-    """Lazy-load Gemini client. Raises clear error if key is missing."""
+    """Lazy-load Groq client. Raises clear error if key is missing."""
     global _client
     if _client is None:
         if DEMO_MODE:
             return None
-        from google import genai
-        if not GEMINI_API_KEY or GEMINI_API_KEY == "demo-key-not-used":
+        import groq
+        if not GROQ_API_KEY or GROQ_API_KEY == "demo-key-not-used":
             raise ValueError(
-                "GEMINI_API_KEY is not set. Add it to backend/.env"
+                "GROQ_API_KEY is not set. Add it to backend/.env"
             )
-        _client = genai.Client(api_key=GEMINI_API_KEY)
+        _client = groq.Groq(api_key=GROQ_API_KEY)
     return _client
 
 
@@ -89,17 +89,12 @@ def _normalize_enum_fields(data: dict) -> dict:
     return data
 
 
-async def _call_gemini(
+async def _call_groq(
     system: str,
     user: str,
     max_tokens: int,
 ) -> str:
-    """
-    Call Gemini with retry on rate-limit (429) or transient errors.
-    Does NOT use response_schema to avoid Pydantic enum validation issues.
-    """
-    from google.genai import types
-
+    """Call Groq with retry on rate-limit (429) or transient errors."""
     client = _get_client()
 
     for attempt, delay in enumerate([0] + RETRY_DELAYS):
@@ -108,46 +103,24 @@ async def _call_gemini(
             await asyncio.sleep(delay)
         try:
             response = await asyncio.to_thread(
-                client.models.generate_content,
-                model=GEMINI_MODEL,
-                contents=user,
-                config=types.GenerateContentConfig(
-                    system_instruction=system,
-                    response_mime_type="application/json",
-                    # NOTE: Not using response_schema= here.
-                    # Passing Pydantic models with Enum fields as schema can cause
-                    # Gemini to return values that fail enum validation.
-                    # We validate manually after cleaning the JSON.
-                    temperature=0.1,
-                    max_output_tokens=max_tokens,
-                    safety_settings=[
-                        types.SafetySetting(
-                            category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-                            threshold=types.HarmBlockThreshold.BLOCK_NONE,
-                        ),
-                        types.SafetySetting(
-                            category=types.HarmCategory.HARM_CATEGORY_HARASSMENT,
-                            threshold=types.HarmBlockThreshold.BLOCK_NONE,
-                        ),
-                        types.SafetySetting(
-                            category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-                            threshold=types.HarmBlockThreshold.BLOCK_NONE,
-                        ),
-                        types.SafetySetting(
-                            category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                            threshold=types.HarmBlockThreshold.BLOCK_NONE,
-                        ),
-                    ],
-                ),
+                client.chat.completions.create,
+                model=GROQ_MODEL,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.1,
+                max_tokens=max_tokens,
             )
-            cleaned_text = _clean_json(response.text)
-            logger.debug("Gemini response (first 300 chars): %s", cleaned_text[:300])
+            cleaned_text = _clean_json(response.choices[0].message.content)
+            logger.debug("Groq response (first 300 chars): %s", cleaned_text[:300])
             json.loads(cleaned_text)  # Validate JSON before returning
             return cleaned_text
 
         except Exception as e:
             err_str = str(e).lower()
-            is_rate_limit = "429" in err_str or "quota" in err_str or "resource exhausted" in err_str
+            is_rate_limit = "429" in err_str or "quota" in err_str or "rate limit" in err_str
             is_server_error = "500" in err_str or "503" in err_str or "unavailable" in err_str
             is_json_error = isinstance(e, json.JSONDecodeError)
             is_network_error = "name resolution" in err_str or "connection" in err_str or "errno" in err_str
@@ -155,12 +128,12 @@ async def _call_gemini(
 
             if is_retryable and attempt < len(RETRY_DELAYS):
                 logger.warning(
-                    f"Retryable Gemini error ({type(e).__name__}: {str(e)[:100]}), "
+                    f"Retryable Groq error ({type(e).__name__}: {str(e)[:100]}), "
                     f"retrying in {RETRY_DELAYS[attempt]}s..."
                 )
                 continue
 
-            logger.error(f"Gemini call failed (non-retryable): {e}")
+            logger.error(f"Groq call failed (non-retryable): {e}")
             raise
 
 
@@ -174,7 +147,7 @@ async def run_pass1(raw_text: str) -> Pass1Result:
         return MOCK_PASS1
 
     doc_text = raw_text[:MAX_CONTEXT_CHARS]
-    raw_json = await _call_gemini(
+    raw_json = await _call_groq(
         system=PASS1_SYSTEM,
         user=PASS1_USER.format(document_text=doc_text),
         max_tokens=MAX_TOKENS_PASS1,
@@ -209,7 +182,7 @@ async def _analyze_single_clause(
 ) -> RiskAnalysis | None:
     async with semaphore:
         try:
-            raw_json = await _call_gemini(
+            raw_json = await _call_groq(
                 system=PASS2_SYSTEM,
                 user=PASS2_USER.format(
                     document_type=doc_type,
@@ -251,7 +224,7 @@ async def run_pass2(pass1_result: Pass1Result) -> list[RiskAnalysis]:
 
     if not valid:
         raise ValueError(
-            "All clause analyses failed. Check your GEMINI_API_KEY and model quota. "
+            "All clause analyses failed. Check your GROQ_API_KEY and model quota. "
             "Try setting DEMO_MODE=true to test without an API key."
         )
 
@@ -281,7 +254,7 @@ async def run_aggregation(
         for r in risk_report
     ]
 
-    raw_json = await _call_gemini(
+    raw_json = await _call_groq(
         system=AGGREGATION_SYSTEM,
         user=AGGREGATION_USER.format(
             document_type=doc_type,

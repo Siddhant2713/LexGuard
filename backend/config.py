@@ -18,18 +18,18 @@ ALLOWED_ORIGINS: list[str] = os.environ.get(
 ).split(",")
 
 # --- AI ---
-_raw_key = os.environ.get("GEMINI_API_KEY", "")
+_raw_key = os.environ.get("GROQ_API_KEY", "")
 if not DEMO_MODE and not _raw_key:
     raise EnvironmentError(
-        "GEMINI_API_KEY is required when DEMO_MODE=false. "
-        "Set it in backend/.env"
+        "GROQ_API_KEY is required when DEMO_MODE=false. "
+        "Get a free key at https://console.groq.com and set it in backend/.env"
     )
-GEMINI_API_KEY: str = _raw_key or "demo-key-not-used"
+GROQ_API_KEY: str = _raw_key or "demo-key-not-used"
 
-# gemini-2.5-flash is the correct GA model name as of 2025.
-# If you get a 404 model error, try: gemini-1.5-flash (always available on free tier)
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
-GEMINI_CHAT_MODEL = os.environ.get("GEMINI_CHAT_MODEL", "gemini-2.5-flash")
+# Analysis passes — best JSON accuracy on free tier (~30 RPM)
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+# Chat streaming — fastest token output, sufficient for RAG chat
+GROQ_CHAT_MODEL = os.environ.get("GROQ_CHAT_MODEL", "llama-3.1-8b-instant")
 
 # --- Token Limits ---
 MAX_TOKENS_PASS1 = 4096
@@ -40,10 +40,8 @@ MAX_TOKENS_CHAT = 1024
 # --- Pipeline ---
 MAX_CLAUSES_PASS2 = 10
 
-# FREE TIER: gemini-2.5-flash allows ~10 RPM on free tier.
-# Running 5 concurrent Pass 2 calls for 10 clauses will hit this limit.
-# Set PASS2_CONCURRENCY=2 for free tier. Set to 5 only if on paid tier.
-PASS2_CONCURRENCY = int(os.environ.get("PASS2_CONCURRENCY", "2"))
+# Groq free tier: ~30 RPM. PASS2_CONCURRENCY=3 is safe; raise to 5 on paid tier.
+PASS2_CONCURRENCY = int(os.environ.get("PASS2_CONCURRENCY", "3"))
 
 FAISS_TOP_K = 3
 # Cap at 100k chars — enough for ~120 page contracts without memory spikes.
@@ -59,8 +57,7 @@ os.environ["ANONYMIZED_TELEMETRY"] = "False"
 os.environ["CHROMA_TELEMETRY"] = "False"
 
 # --- Retry ---
-# Increase delays for free tier rate limiting
-RETRY_DELAYS = [5, 15, 30]  # seconds — longer backoff for free tier 429s
+RETRY_DELAYS = [5, 15, 30]  # seconds
 
 # --- Firebase ---
 FIREBASE_STORAGE_BUCKET = os.environ.get("FIREBASE_STORAGE_BUCKET", "")

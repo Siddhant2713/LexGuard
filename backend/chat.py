@@ -2,16 +2,26 @@ import asyncio
 import logging
 from typing import AsyncGenerator
 
-from google import genai
-from google.genai import types
-
-from config import GEMINI_API_KEY, GEMINI_CHAT_MODEL, MAX_TOKENS_CHAT, FAISS_TOP_K, DEMO_MODE
+from config import GROQ_API_KEY, GROQ_CHAT_MODEL, MAX_TOKENS_CHAT, FAISS_TOP_K, DEMO_MODE
 from prompts.v1.chat import CHAT_SYSTEM, CHAT_USER
 from embedder import search_chunks
 
 logger = logging.getLogger(__name__)
 
-_client = None if DEMO_MODE else genai.Client(api_key=GEMINI_API_KEY)
+_client = None
+
+
+def _get_client():
+    """Lazy-load Groq client — avoids crash on import if key is invalid."""
+    global _client
+    if _client is None:
+        if DEMO_MODE:
+            return None
+        import groq
+        if not GROQ_API_KEY or GROQ_API_KEY == "demo-key-not-used":
+            raise ValueError("GROQ_API_KEY is not set. Add it to backend/.env")
+        _client = groq.Groq(api_key=GROQ_API_KEY)
+    return _client
 
 
 def _build_context(chunks: list[dict]) -> str:
@@ -61,23 +71,26 @@ async def stream_chat(
     system_prompt = CHAT_SYSTEM.format(retrieved_context=retrieved_context)
 
     try:
-        # Run streaming in a thread (google-genai is synchronous)
-        response_iter = await asyncio.to_thread(
-            lambda: _client.models.generate_content_stream(
-                model=GEMINI_CHAT_MODEL,
-                contents=CHAT_USER.format(query=query),
-                config=types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                    temperature=0.2,
-                    max_output_tokens=MAX_TOKENS_CHAT,
-                ),
+        # Run streaming in a thread (groq SDK is synchronous)
+        def _stream():
+            return _get_client().chat.completions.create(
+                model=GROQ_CHAT_MODEL,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": CHAT_USER.format(query=query)},
+                ],
+                temperature=0.2,
+                max_tokens=MAX_TOKENS_CHAT,
+                stream=True,
             )
-        )
+
+        response_iter = await asyncio.to_thread(_stream)
 
         for chunk in response_iter:
-            if chunk.text:
+            text = chunk.choices[0].delta.content
+            if text:
                 # Escape newlines for SSE format
-                safe_text = chunk.text.replace("\n", "\\n")
+                safe_text = text.replace("\n", "\\n")
                 yield f"data: {safe_text}\n\n"
 
     except Exception as e:

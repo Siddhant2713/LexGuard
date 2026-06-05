@@ -229,7 +229,7 @@ async def analyze(request: Request, session_id: str = Query(...)):
     session.summary = summary
 
     try:
-        await update_risk_report(session_id, risk_report, aggregation.model_dump(), summary)
+        await update_risk_report(session_id, risk_report, aggregation, summary)
     except Exception as e:
         logger.warning(f"Failed to persist risk report (non-fatal): {e}")
 

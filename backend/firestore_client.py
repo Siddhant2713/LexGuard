@@ -106,13 +106,13 @@ async def update_risk_report(
     if db is not None:
         try:
             doc_ref = db.collection("sessions").document(session_id)
-            await doc_ref.update({
+            await doc_ref.set({
                 "risk_report": [
                     r.model_dump() if hasattr(r, "model_dump") else r for r in risk_report
                 ],
                 "aggregation": aggregation.model_dump() if hasattr(aggregation, "model_dump") else aggregation,
                 "summary": summary,
-            })
+            }, merge=True)
         except Exception as e:
             logger.warning(f"Firestore update failed (in-memory updated): {e}")
 
