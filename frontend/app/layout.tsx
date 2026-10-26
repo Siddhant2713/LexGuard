@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import "./globals.css"
+import { AuthProvider } from "@/lib/auth"
 
 export const metadata: Metadata = {
   title: "LexGuard — Read Before You Sign",
@@ -29,7 +30,7 @@ export default function RootLayout({
         />
       </head>
       <body style={{ background: "var(--bg-0)", color: "var(--text-0)" }}>
-        {children}
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   )

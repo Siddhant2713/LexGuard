@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef } from "react"
+import type * as THREE from "three"
 
 export default function WebGLBackground() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -14,7 +15,7 @@ export default function WebGLBackground() {
     let disposeScene: (() => void) | null = null
 
     ;(async () => {
-      const THREE = await import("three")
+      const THREE = await import("three") // value shadows the type-only import above
 
       // If cleanup ran while we were awaiting the import, bail immediately.
       if (cancelled) return

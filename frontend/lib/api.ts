@@ -2,10 +2,59 @@ import type {
   UploadResponse,
   AnalyzeResponse,
   ReportResponse,
+  User,
+  ContractSummary,
 } from "./types"
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+
+// ─── Auth ──────────────────────────────────────────────────────────────────
+// The session lives in an httpOnly cookie set by the API, so every request opts in with
+// `credentials: "include"`. The token is never visible to JavaScript.
+
+export class ApiError extends Error {
+  constructor(message: string, public status: number) {
+    super(message)
+  }
+}
+
+async function authRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, {
+    ...init,
+    credentials: "include",
+    headers: { "Content-Type": "application/json", ...init.headers },
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new ApiError(data.detail || "Request failed", res.status)
+  return data as T
+}
+
+export const register = (name: string, email: string, password: string) =>
+  authRequest<{ user: User }>("/auth/register", {
+    method: "POST",
+    body: JSON.stringify({ name, email, password }),
+  }).then((r) => r.user)
+
+export const login = (email: string, password: string) =>
+  authRequest<{ user: User }>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  }).then((r) => r.user)
+
+export const logout = () => authRequest<{ ok: boolean }>("/auth/logout", { method: "POST" })
+
+/** Returns the signed-in user, or null when there is no valid session. */
+export const getMe = () =>
+  authRequest<{ user: User }>("/auth/me")
+    .then((r) => r.user)
+    .catch((err) => {
+      if (err instanceof ApiError && err.status === 401) return null
+      throw err
+    })
+
+export const listContracts = () =>
+  authRequest<{ contracts: ContractSummary[] }>("/contracts").then((r) => r.contracts)
 
 // ─── Upload ────────────────────────────────────────────────────────────────
 
@@ -16,6 +65,7 @@ export async function uploadContract(file: File): Promise<UploadResponse> {
   const res = await fetch(`${API_URL}/upload`, {
     method: "POST",
     body: form,
+    credentials: "include",
   })
 
   if (!res.ok) {
@@ -33,7 +83,7 @@ export async function analyzeContract(
 ): Promise<AnalyzeResponse> {
   const res = await fetch(
     `${API_URL}/analyze?session_id=${sessionId}`,
-    { method: "POST" }
+    { method: "POST", credentials: "include" }
   )
 
   if (!res.ok) {
@@ -47,7 +97,7 @@ export async function analyzeContract(
 // ─── Report ────────────────────────────────────────────────────────────────
 
 export async function getReport(sessionId: string): Promise<ReportResponse | null> {
-  const res = await fetch(`${API_URL}/report/${sessionId}`)
+  const res = await fetch(`${API_URL}/report/${sessionId}`, { credentials: "include" })
 
   if (res.status === 404) return null;
   if (!res.ok) {
@@ -74,6 +124,7 @@ export function streamChat(
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ session_id: sessionId, query }),
+        credentials: "include",
         signal: controller.signal,
       })
 

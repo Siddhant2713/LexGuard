@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
 import type { RiskAnalysis, AggregationResult, Severity, RawClause } from "@/lib/types"
 import { analyzeContract, getReport } from "@/lib/api"
+import { useRequireAuth } from "@/lib/auth"
 import { severityColors, animateDashboardEntry, animateClauseSelect } from "@/lib/utils"
 
 const AnalysisProgress = dynamic(() => import("@/components/analysis/AnalysisProgress"), { ssr: false })
@@ -16,7 +17,7 @@ const ErrorBoundary = dynamic(() => import("@/components/ErrorBoundary"), { ssr:
 
 type Phase = "analyzing" | "dashboard" | "error"
 
-export default function AnalyzePage() {
+function AnalyzeInner() {
   const params = useParams()
   const router = useRouter()
   const sessionId = params.sessionId as string
@@ -270,4 +271,10 @@ export default function AnalyzePage() {
       </div>
     </div>
   )
+}
+
+// The analysis effect fires a request on mount, so only mount it once we know who the user is.
+export default function AnalyzePage() {
+  const { user } = useRequireAuth()
+  return user ? <AnalyzeInner /> : null
 }

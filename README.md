@@ -1,215 +1,59 @@
-# ⚖️ LexGuard — Enterprise AI Contract Intelligence
+# LexGuard
 
-<div align="center">
-  <p><strong>Demystifying legal agreements through multi-pass AI analysis, vector-grounded RAG, and executive-grade precision UX.</strong></p>
-  <p>
-    <img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
-    <img src="https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi" alt="FastAPI" />
-    <img src="https://img.shields.io/badge/Next.js_14-000000?style=for-the-badge&logo=next.js&logoColor=white" alt="Next.js" />
-    <img src="https://img.shields.io/badge/React_18-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React" />
-    <img src="https://img.shields.io/badge/Gemini_AI-8E7565?style=for-the-badge&logo=google&logoColor=white" alt="Gemini" />
-    <img src="https://img.shields.io/badge/ChromaDB-FF6B6B?style=for-the-badge&logo=database&logoColor=white" alt="ChromaDB" />
-    <img src="https://img.shields.io/badge/Google_Cloud-4285F4?style=for-the-badge&logo=google-cloud&logoColor=white" alt="GCP" />
-  </p>
-</div>
+AI contract intelligence: upload a PDF/DOCX, get clause-level risk analysis, an overall risk profile, and a chat grounded in the document.
 
----
+**Stack:** Next.js frontend · Node.js (Express) backend · MongoDB (Mongoose) · Groq LLMs
 
-## 📖 Overview
+## Quickstart
 
-People and businesses sign contracts every day without fully understanding the underlying liabilities. Legal language is deliberately nuanced, lengthy, and opaque. **LexGuard** transforms dense contracts (PDFs & DOCX) into transparent, risk-assessed executive summaries in seconds.
-
-Built with a high-performance **FastAPI** backend, a state-of-the-art **Google Gemini GenAI SDK** pipeline, local **ChromaDB** vector embedding for real-time RAG chat, and a premium **Next.js** frontend inspired by institutional financial terminals, LexGuard empowers signees to negotiate with absolute confidence.
-
----
-
-## ✨ Core Features
-
-### 🔍 1. Multi-Pass Contract Deconstruction
-- **Structural Ingestion:** Directly parses complex PDF and DOCX files using robust text extraction algorithms (`PyMuPDF` / `python-docx`).
-- **Pass 1 — Structural Extraction:** Deconstructs contracts into distinct legal clauses, identifying document types, governing laws, and calculating initial **suspicion scores** (0.0 to 10.0) using structured Pydantic schema outputs.
-
-### 🛡️ 2. Deep Risk Taxonomy & Plain English Translation
-- **Pass 2 — Granular Risk Analysis:** Concurrently evaluates flagged clauses across standard legal categories (IP transfer, non-compete, indemnification, termination, arbitration).
-- **Plain English Breakdown:** Translates legalese into 2-3 sentence non-lawyer summaries.
-- **Direct Consequences:** Generates hard-hitting `"If you sign this..."` consequence statements.
-- **Verbatim Red Flags:** Extracts precise 3-5 word high-risk phrases directly from the document text.
-- **Actionable Negotiation Tips:** Recommends concrete carve-outs, time limits, and scope restrictions for counter-proposals.
-
-### 🤖 3. Grounded RAG Chat Assistant
-- **Local Embedding:** Automatically chunks contract text and generates dense semantic vector embeddings via `sentence-transformers/all-MiniLM-L6-v2`.
-- **ChromaDB Vector Store:** Houses document embeddings locally for sub-millisecond retrieval.
-- **SSE Real-Time Streaming:** Streams answers in real-time through Server-Sent Events (SSE), strictly grounded in document context with verbatim clause citations (e.g., `[Clause: Governing Law]`).
-
-### 🏛️ 4. Enterprise Persistence & Cloud Infrastructure
-- **Google Cloud Firestore:** Seamlessly persists session states, parsed contract structures, risk report snapshots, and chat history.
-- **Firebase Cloud Storage:** Safely archives uploaded contract artifacts for secure retrieval and auditability.
-
-### 🎨 5. Precision Terminal UX
-- **Bloomberg / Surgeon Table Aesthetic:** Information-dense, high-contrast typography and layout with zero fluff.
-- **Curated Severity Dashboard:** Instantly highlights **Critical**, **High**, **Medium**, and **Low** risks with custom color-coded badges and filtering.
-- **Cinematic Micro-Animations:** Smooth layout transitions powered by **GSAP** and subtle interactive **Three.js WebGL** background canvases.
-
----
-
-## 🏗️ System Architecture
-
-```mermaid
-flowchart TB
-    subgraph Client [Browser / Client]
-        UI[Next.js Premium Terminal UI]
-        ChatUI[Real-time SSE Chat Panel]
-    end
-
-    subgraph Backend [FastAPI Backend]
-        API_Upload[POST /upload]
-        API_Analyze[POST /analyze]
-        API_Chat[POST /chat SSE Stream]
-        
-        Parser[Document Extraction\nPyMuPDF / python-docx]
-        Chunker[Clause Splitter & Regex Chunker]
-        Embedder[MiniLM Embedder & ChromaDB]
-        
-        Pass1[Pass 1 AI: Structural Ingestion\nGoogle Gemini GenAI SDK]
-        Pass2[Pass 2 AI: Concurrent Risk Analysis\nGoogle Gemini GenAI SDK]
-        Agg[Pass 3 AI: Executive Aggregation]
-    end
-
-    subgraph Cloud [Google Cloud Platform]
-        Firestore[(Firestore Session & Risk Store)]
-        Storage[(Firebase Contract Bucket)]
-    end
-
-    UI -- "1. Upload Contract" --> API_Upload
-    API_Upload --> Parser
-    Parser --> Chunker
-    Chunker --> Embedder
-    Parser --> Pass1
-    API_Upload --> Storage
-    Pass1 --> Firestore
-    
-    UI -- "2. Run Risk Analysis" --> API_Analyze
-    API_Analyze --> Pass2
-    Pass2 --> Agg
-    Agg --> Firestore
-    
-    ChatUI -- "3. Query Specific Clause" --> API_Chat
-    API_Chat <--> Embedder
-    API_Chat -- "Stream SSE" --> ChatUI
-```
-
----
-
-## 🚀 Quickstart & Installation
-
-### 📋 Prerequisites
-- **Python 3.11+**
-- **Node.js 20+** & **npm**
-- **Google Gemini API Key** (`GEMINI_API_KEY`)
-- **Google Cloud / Firebase Project** (Firestore & Firebase Storage enabled)
-
----
-
-### ⚙️ 1. Backend Setup
+Requires Node 20+, a MongoDB instance (local or Atlas), and a [Groq API key](https://console.groq.com).
 
 ```bash
-# Navigate to the backend directory
+# Backend (http://localhost:8000)
 cd backend
-
-# Create and activate a Python virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-#### Environment Variables (`backend/.env`)
-Create a `.env` file in the `backend/` directory:
-
-```env
-# Mode configuration
-# DEMO_MODE=true bypasses live Gemini/Firebase calls for instant offline testing
-DEMO_MODE=false
-
-# Gemini AI Credentials
-GEMINI_API_KEY=your_actual_gemini_api_key_here
-
-# Firebase / GCP Project Configuration
-GOOGLE_CLOUD_PROJECT=your-gcp-project-id
-FIREBASE_STORAGE_BUCKET=your-project.appspot.com
-
-# Optional: Path to Firebase service account JSON key (for local development)
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/serviceAccountKey.json
-```
-
-#### Run the Backend Server
-```bash
-uvicorn main:app --reload --port 8000
-```
-The FastAPI documentation will be instantly accessible at [http://localhost:8000/docs](http://localhost:8000/docs).
-
----
-
-### 💻 2. Frontend Setup
-
-```bash
-# Navigate to the frontend directory
-cd frontend
-
-# Install Node dependencies
+cp .env.example .env      # fill in MONGODB_URI, GROQ_API_KEY and JWT_SECRET
 npm install
-```
+npm run dev
 
-#### Environment Variables (`frontend/.env.local`)
-Create a `.env.local` file in the `frontend/` directory:
-
-```env
-NEXT_PUBLIC_API_URL=http://localhost:8000
-```
-
-#### Run the Frontend Development Server
-```bash
+# Frontend (http://localhost:3000)
+cd frontend
+echo "NEXT_PUBLIC_API_URL=http://localhost:8000" > .env.local
+npm install
 npm run dev
 ```
-Open [http://localhost:3000](http://localhost:3000) in your browser to experience LexGuard.
 
----
+Backend tests: `cd backend && npm test`
 
-## 📡 Key API Endpoints
+## How it works
+
+Users register and sign in (`/register`, `/login`); each contract belongs to the user who uploaded it, and **My contracts** lists theirs. See [Auth](#auth).
+
+1. **`POST /upload`** parses the file (`pdf-parse` / `mammoth`), runs Pass 1 (clause extraction), splits the text into chunks, and persists the session and chunks in MongoDB.
+2. **`POST /analyze?session_id=`** runs Pass 2 (per-clause risk analysis, bounded concurrency) and Pass 3 (aggregation), then saves the report.
+3. **`POST /chat`** retrieves the most relevant chunks with a MongoDB text index and streams a grounded answer over SSE. Messages are persisted.
 
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `GET` | `/health` | API health check and version status. |
-| `POST` | `/upload` | Ingests PDF/DOCX contract, runs Pass 1 structural extraction, indexes into ChromaDB, and returns clauses. |
-| `POST` | `/analyze` | Executes Pass 2 concurrent risk analysis and Pass 3 overall contract executive aggregation. |
-| `POST` | `/chat` | SSE streaming endpoint for real-time document-grounded RAG query and response. |
-| `GET` | `/report/{session_id}`| Retrieves complete persisted contract analysis session and risk report from Firestore. |
-| `GET` | `/chat/{session_id}/history` | Retrieves historical chat messages for a specific contract session. |
+| `POST` | `/auth/register` | Create account, start session |
+| `POST` | `/auth/login` | Sign in |
+| `POST` | `/auth/logout` | Sign out (revokes the token) |
+| `GET` | `/auth/me` | Current user |
+| `GET` | `/contracts` | The signed-in user's contracts |
+| `GET` | `/health` | Health check |
+| `POST` | `/upload` | Upload + Pass 1 |
+| `POST` | `/analyze` | Pass 2 + 3 |
+| `POST` | `/chat` | SSE chat |
+| `GET` | `/report/:sessionId` | Saved report |
+| `GET` | `/chat/:sessionId/history` | Chat history |
 
----
+### MongoDB collections
 
-## 🧪 Demo / Sandbox Mode
+`sessions` (metadata + Pass 1/2/3 results), `chunks` (clause text, text-indexed), `chatmessages`.
 
-For testing or development without consuming Gemini API tokens or requiring Firebase setup, LexGuard includes a robust **Demo Mode**.
+## Auth
 
-In `backend/.env`:
-```env
-DEMO_MODE=true
-```
-When enabled, LexGuard bypasses external network requests and instantly serves highly realistic, pre-computed contract intelligence data models for seamless UI and workflow evaluation.
+bcrypt-hashed passwords (cost 12), a JWT in an `httpOnly` `SameSite=Lax` cookie, zod validation on every input (strict, rejects markup in names and NoSQL operators), account lockout, per-IP rate limits, an `Origin` check on state-changing requests (CSRF), and `helmet` headers. Contracts are only readable by their owner. Code: `backend/src/{models,controllers,routes,middleware}`.
 
----
+Integration tests need a throwaway database: `TEST_MONGODB_URI=mongodb://127.0.0.1:27017/lexguard_test npm test`.
 
-## 🛡️ Security & Privacy Notice
-
-LexGuard is designed with enterprise security in mind:
-- **Ephemeral Processing:** In-memory vector embedding ensures that chunked data resides locally inside ChromaDB.
-- **Strict Pydantic Enforcement:** All LLM outputs are rigorously validated against strict Pydantic schemas, eliminating prompt injection anomalies and malformed responses.
-- **No Model Training:** Contracts processed through the Gemini API under standard enterprise terms are not used to train underlying foundation models.
-
----
-
-<div align="center">
-  <p>⚖️ <strong>LexGuard</strong> — Empowering clarity in every agreement.</p>
-</div>
+All LLM output is validated with zod before it is stored or returned.

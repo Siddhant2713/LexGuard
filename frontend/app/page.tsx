@@ -2,6 +2,8 @@
 
 import { useState } from "react"
 import dynamic from "next/dynamic"
+import { useRequireAuth } from "@/lib/auth"
+import AppNav from "@/components/AppNav"
 
 // Dynamically import to avoid SSR issues with Three.js / GSAP
 const UploadZone = dynamic(() => import("@/components/upload/UploadZone"), {
@@ -9,11 +11,15 @@ const UploadZone = dynamic(() => import("@/components/upload/UploadZone"), {
 })
 
 export default function HomePage() {
+  const { user } = useRequireAuth()
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  if (!user) return null
+
   return (
     <main style={{ minHeight: "100vh", backgroundColor: "var(--bg-0)" }}>
+      <AppNav />
       {error && (
         <div
           style={{

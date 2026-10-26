@@ -12,30 +12,21 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    services:
+      mongo:
+        image: mongo:7
+        ports: ["27017:27017"]
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-node@v4
         with:
-          python-version: "3.11"
-
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Run tests
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm test
         env:
-          DEMO_MODE: "true"
-          USE_FIREBASE: "false"
-        run: pytest tests/ -v --tb=short
+          TEST_MONGODB_URI: mongodb://127.0.0.1:27017/lexguard_test
 
   frontend-lint:
     runs-on: ubuntu-latest

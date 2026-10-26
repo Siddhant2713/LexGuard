@@ -79,3 +79,23 @@ export interface ParsedCitation {
   heading: string
   raw: string
 }
+
+// ─── Auth / contracts list ─────────────────────────────────────────────────
+
+export interface User {
+  id: string
+  name: string
+  email: string
+  created_at: string
+}
+
+export interface ContractSummary {
+  session_id: string
+  filename: string
+  document_type: string
+  created_at: string
+  analyzed: boolean
+  overall_risk: Severity | null
+  risk_score: number | null
+  summary: Partial<Record<Severity, number>>
+}
