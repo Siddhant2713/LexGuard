@@ -16,7 +16,7 @@ export function createApp() {
   app.disable("x-powered-by");
 
   app.use(helmet());
-  app.use(cors({ origin: config.allowedOrigins, credentials: true, methods: ["GET", "POST"] }));
+  app.use(cors({ origin: config.allowedOrigins, credentials: true, methods: ["GET", "POST", "DELETE"] }));
   app.use(express.json({ limit: "100kb" }));
   app.use(cookieParser());
   app.use(originGuard);

@@ -1,138 +1,90 @@
-import type { Severity } from "./types"
+import type { RawClause, Severity } from "./types"
 
 // ─── Severity helpers ───────────────────────────────────────────────────────
 
-export const severityColors: Record<Severity, { text: string; border: string; bg: string }> = {
-  critical: { text: "#9B3B28", border: "#C89080", bg: "#FBF1EE" },
-  high:     { text: "#8A5C10", border: "#C8A055", bg: "#FBF6EC" },
-  medium:   { text: "#4D6E25", border: "#92B065", bg: "#F3F7ED" },
-  low:      { text: "#2B6494", border: "#7AAAC8", bg: "#EEF3F9" },
-}
+export const SEVERITIES: Severity[] = ["critical", "high", "medium", "low"]
 
 export const severityLabel: Record<Severity, string> = {
-  critical: "CRITICAL",
-  high: "HIGH",
-  medium: "MEDIUM",
-  low: "LOW",
+  critical: "Critical",
+  high: "High",
+  medium: "Medium",
+  low: "Low",
+}
+
+export interface SeverityStyle {
+  lbg: string   // label background
+  lbd: string   // label border
+  ltx: string   // label text
+  tint: string  // clause shading
+  ring: string  // selected outline
+}
+
+// One accent, four strengths: critical is solid, the rest step down to a faint tint.
+export const severityStyle: Record<Severity, SeverityStyle> = {
+  critical: { lbg: "var(--acc)", lbd: "var(--acc)", ltx: "var(--onacc)", tint: "var(--tc)", ring: "var(--acc)" },
+  high:     { lbg: "var(--bg0)", lbd: "var(--acc)", ltx: "var(--acctx)", tint: "var(--th)", ring: "var(--acc)" },
+  medium:   { lbg: "var(--bg0)", lbd: "var(--bd1)", ltx: "var(--t1)", tint: "var(--tm)", ring: "var(--t1)" },
+  low:      { lbg: "var(--bg0)", lbd: "var(--bd1)", ltx: "var(--t2)", tint: "var(--tl)", ring: "var(--t2)" },
 }
 
 export function severityWeight(s: Severity): number {
   return { critical: 0, high: 1, medium: 2, low: 3 }[s]
 }
 
+/** Provisional severity from the pass-1 suspicion score, used while pass 2 is running. */
+export function severityFromScore(score: number): Severity {
+  return score >= 8 ? "critical" : score >= 6 ? "high" : score >= 4 ? "medium" : "low"
+}
+
+// ─── Clauses ────────────────────────────────────────────────────────────────
+
+/** "clause_04" → "4". Falls back to the raw id when it has no number. */
+export function clauseNumber(id: string): string {
+  const m = id.match(/(\d+)\s*$/)
+  return m ? String(Number(m[1])) : id
+}
+
+/** Pass 1 returns clauses ranked by suspicion; this puts them back in document order. */
+export function inDocumentOrder(clauses: RawClause[]): RawClause[] {
+  const n = (c: RawClause) => Number(c.id.match(/(\d+)\s*$/)?.[1] ?? Infinity)
+  return [...clauses].sort((a, b) => n(a) - n(b))
+}
+
 // ─── Citation parsing ───────────────────────────────────────────────────────
 
-export interface ParsedSegment {
-  type: "text" | "citation"
-  content: string
-  clauseId?: string
-  heading?: string
+export interface Citation {
+  clauseId: string
+  heading: string
 }
 
 /**
- * Parse [[CLAUSE:clause_id:Heading]] markers from chat response text.
- * Returns an array of text and citation segments for rendering.
+ * Splits a chat answer into plain text and the [[CLAUSE:clause_id:Heading]] markers it cites.
+ * An unfinished marker at the end of a streaming answer is hidden until it completes.
  */
-export function parseCitations(text: string): ParsedSegment[] {
-  const regex = /\[\[CLAUSE:([\w\-]+):([^\]]+)\]\]/g
-  const segments: ParsedSegment[] = []
-  let lastIndex = 0
-  let match: RegExpExecArray | null
-
-  while ((match = regex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      segments.push({ type: "text", content: text.slice(lastIndex, match.index) })
-    }
-    segments.push({
-      type: "citation",
-      content: match[0],
-      clauseId: match[1],
-      heading: match[2],
+export function parseCitations(text: string): { text: string; cites: Citation[] } {
+  const cites: Citation[] = []
+  const clean = text
+    .replace(/\[\[CLAUSE:([\w-]+):([^\]]+)\]\]/g, (_, clauseId: string, heading: string) => {
+      if (!cites.some((c) => c.clauseId === clauseId)) cites.push({ clauseId, heading: heading.trim() })
+      return heading.trim()
     })
-    lastIndex = regex.lastIndex
-  }
-
-  if (lastIndex < text.length) {
-    segments.push({ type: "text", content: text.slice(lastIndex) })
-  }
-
-  return segments
+    .replace(/\[\[[^\]]*$/, "")
+  return { text: clean, cites }
 }
 
-// ─── Red flag highlighting ──────────────────────────────────────────────────
+// ─── Formatting ─────────────────────────────────────────────────────────────
 
-/**
- * Highlight red_flag phrases within clause text.
- * Returns an array of {text, isFlag} segments.
- */
-export function highlightRedFlags(
-  clauseText: string,
-  redFlags: string[]
-): Array<{ text: string; isFlag: boolean }> {
-  if (!redFlags.length) return [{ text: clauseText, isFlag: false }]
-
-  // Escape special regex chars in flag phrases
-  const escaped = redFlags.map((f) =>
-    f.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-  )
-  const pattern = new RegExp(`(${escaped.join("|")})`, "gi")
-  const parts = clauseText.split(pattern)
-
-  const flagSet = new Set(redFlags.map((f) => f.toLowerCase()))
-
-  return parts.map((part) => ({
-    text: part,
-    isFlag: flagSet.has(part.toLowerCase()),
-  }))
+/** Pass 1 classifies unknown documents as "Other"; show those as a plain "Contract". */
+export function documentTitle(type: string | null | undefined): string {
+  const t = (type ?? "").trim()
+  return !t || /^other$/i.test(t) ? "Contract" : t
 }
 
-// ─── GSAP animation helpers (browser-only) ─────────────────────────────────
-
-export function animateUploadEntry() {
-  if (typeof window === "undefined") return
-  // Small delay ensures elements are painted before GSAP reads their positions
-  setTimeout(() => {
-    import("gsap").then(({ gsap }) => {
-      // Use fromTo so the final state (opacity:1, y:0) is always explicit.
-      // If the animation is interrupted, elements end up visible — not hidden.
-      const tl = gsap.timeline({ defaults: { ease: "power4.out" } })
-      tl.fromTo(".wordmark-char",
-          { y: 30, opacity: 0 },
-          { y: 0, opacity: 1, duration: 0.7, stagger: 0.04 })
-        .fromTo(".tagline",
-          { y: 12, opacity: 0 },
-          { y: 0, opacity: 1, duration: 0.5 }, "-=0.4")
-        .fromTo(".dropzone",
-          { y: 20, opacity: 0 },
-          { y: 0, opacity: 1, duration: 0.5 }, "-=0.3")
-        .fromTo(".upload-meta",
-          { opacity: 0 },
-          { opacity: 1, duration: 0.4 }, "-=0.2")
-    })
-  }, 80)
+export function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
 }
 
-export function animateDashboardEntry() {
-  if (typeof window === "undefined") return
-  setTimeout(() => {
-    import("gsap").then(({ gsap }) => {
-      const tl = gsap.timeline({ defaults: { ease: "power2.out" } })
-      tl.fromTo(".header-bar",  { opacity: 0 }, { opacity: 1, duration: 0.3 })
-        .fromTo(".risk-banner", { opacity: 0 }, { opacity: 1, duration: 0.3 }, "-=0.1")
-        .fromTo(".clause-card", { opacity: 0 }, { opacity: 1, stagger: 0.04, duration: 0.3 }, "-=0.1")
-        .fromTo(".detail-panel",{ opacity: 0 }, { opacity: 1, duration: 0.35 }, "-=0.2")
-        .fromTo(".chat-panel",  { opacity: 0 }, { opacity: 1, duration: 0.3 }, "-=0.25")
-    })
-  }, 60)
-}
-
-export function animateClauseSelect(detailEl: HTMLElement) {
-  if (typeof window === "undefined") return
-  import("gsap").then(({ gsap }) => {
-    gsap.fromTo(
-      detailEl,
-      { opacity: 0, x: -8 },
-      { opacity: 1, x: 0, duration: 0.28, ease: "power4.out" }
-    )
-  })
+export function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase()
 }

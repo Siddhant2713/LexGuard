@@ -27,9 +27,8 @@ export default class ErrorBoundary extends Component<Props, State> {
   public render() {
     if (this.state.hasError) {
       return this.props.fallback || (
-        <div style={{ padding: "20px", color: "var(--sev-critical-text)", fontFamily: "var(--font-sans)" }}>
-          <h3>Component Error</h3>
-          <p>Something went wrong rendering this panel.</p>
+        <div style={{ padding: 20, fontSize: 14, color: "var(--acctx)" }}>
+          Something went wrong showing this panel. Reload the page to try again.
         </div>
       )
     }

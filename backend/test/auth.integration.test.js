@@ -150,6 +150,21 @@ test("chunks and chat messages are owned too, and queries are scoped by owner", 
   await assert.rejects(ChatMessage.create({ session_id: "s", role: "user", content: "x" }), /user_id/);
 });
 
+test("delete removes a contract with its chunks and chat; only the owner can delete", { skip }, async () => {
+  const alice = client(), eve = client();
+  await alice("/auth/login", { method: "POST", body: { email: "alice@example.com", password: pw } });
+  await eve("/auth/login", { method: "POST", body: { email: "eve@example.com", password: pw } });
+
+  assert.equal((await eve("/contracts/sess-alice", { method: "DELETE" })).res.status, 404);
+  assert.ok(await Session.exists({ session_id: "sess-alice" }));
+
+  assert.equal((await alice("/contracts/sess-alice", { method: "DELETE" })).res.status, 200);
+  assert.equal(await Session.countDocuments({ session_id: "sess-alice" }), 0);
+  assert.equal(await Chunk.countDocuments({ session_id: "sess-alice" }), 0);
+  assert.equal(await ChatMessage.countDocuments({ session_id: "sess-alice" }), 0);
+  assert.equal((await alice("/contracts/sess-alice", { method: "DELETE" })).res.status, 404);
+});
+
 test("logout revokes the token server-side", { skip }, async () => {
   const c = client();
   const login = await c("/auth/login", { method: "POST", body: { email: "alice@example.com", password: pw } });

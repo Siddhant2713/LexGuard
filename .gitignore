@@ -25,3 +25,6 @@ test_contracts/
 # Specs
 spec/
 *.tsbuildinfo
+
+# Design prototype (local reference only)
+LexGuard Prototype.html

@@ -132,6 +132,15 @@ export async function chatHistory(req, res) {
   res.json({ session_id: sessionId, messages: rows.reverse().map(({ role, content }) => ({ role, content })) });
 }
 
+// Removes the contract with its report, chunks and chat. Scoped by owner like every other read.
+export async function deleteContract(req, res) {
+  const { sessionId } = req.params;
+  await findOwnedSession(req, sessionId, "Session not found.");
+  const scope = { user_id: req.user._id, session_id: String(sessionId) };
+  await Promise.all([Session.deleteOne(scope), Chunk.deleteMany(scope), ChatMessage.deleteMany(scope)]);
+  res.json({ ok: true });
+}
+
 // Everything the signed-in user has analyzed, newest first.
 export async function listContracts(req, res) {
   const rows = await Session.find(

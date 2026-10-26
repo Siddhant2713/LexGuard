@@ -56,6 +56,10 @@ export const getMe = () =>
 export const listContracts = () =>
   authRequest<{ contracts: ContractSummary[] }>("/contracts").then((r) => r.contracts)
 
+/** Removes the contract, its report and its chat. */
+export const deleteContract = (sessionId: string) =>
+  authRequest<{ ok: boolean }>(`/contracts/${encodeURIComponent(sessionId)}`, { method: "DELETE" })
+
 // ─── Upload ────────────────────────────────────────────────────────────────
 
 export async function uploadContract(file: File): Promise<UploadResponse> {

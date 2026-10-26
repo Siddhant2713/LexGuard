@@ -16,6 +16,7 @@ const limit = (max) =>
 contractsRouter.use(requireAuth);
 
 contractsRouter.get("/contracts", wrap(contracts.listContracts));
+contractsRouter.delete("/contracts/:sessionId", wrap(contracts.deleteContract));
 contractsRouter.post("/upload", limit(10), upload.single("file"), wrap(contracts.upload));
 contractsRouter.post("/analyze", limit(5), wrap(contracts.analyze));
 contractsRouter.post("/chat", wrap(contracts.chat));
