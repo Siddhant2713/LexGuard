@@ -16,7 +16,10 @@ const required = (name) => {
 
 export const config = {
   port: Number(env.PORT || 8000),
-  allowedOrigins: (env.ALLOWED_ORIGINS || "http://localhost:3000,http://localhost:3001").split(","),
+  allowedOrigins: (env.ALLOWED_ORIGINS || "http://localhost:3000,http://localhost:3001")
+    .split(",")
+    .map((o) => o.trim().replace(/\/+$/, ""))
+    .filter(Boolean),
 
   get mongodbUri() { return required("MONGODB_URI"); },
   // Signing key for session JWTs. Generate: node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
