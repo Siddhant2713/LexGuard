@@ -31,3 +31,7 @@ LexGuard Prototype.html
 
 # Deployment guide (local only)
 DEPLOYMENT.md
+
+# Cloudflare / OpenNext build output
+.open-next/
+.wrangler/

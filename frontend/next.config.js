@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 
+// Production: "/api", proxied to the Render API by the rewrite below (so the session cookie is
+// first-party). Local dev: the API directly.
 const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+const apiOrigin = process.env.API_ORIGIN
 
 // Razorpay Checkout loads its script, opens its payment form in an iframe, and reports
 // telemetry; these are the origins it needs.
@@ -34,6 +37,9 @@ const nextConfig = {
   reactStrictMode: true,
   env: {
     NEXT_PUBLIC_API_URL: apiUrl,
+  },
+  async rewrites() {
+    return apiOrigin ? [{ source: "/api/:path*", destination: `${apiOrigin}/:path*` }] : []
   },
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }]
