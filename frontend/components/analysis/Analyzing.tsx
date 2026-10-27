@@ -9,7 +9,7 @@ interface AnalyzingProps {
   parties: string[]
   /** In document order. */
   clauses: RawClause[]
-  /** How many clauses have been "read". Simulated: the backend reports only when all are done. */
+  /** How many clauses have been read, scaled from the API's Pass 2 progress. */
   progress: number
 }
 

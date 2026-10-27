@@ -28,3 +28,6 @@ spec/
 
 # Design prototype (local reference only)
 LexGuard Prototype.html
+
+# Deployment guide (local only)
+DEPLOYMENT.md

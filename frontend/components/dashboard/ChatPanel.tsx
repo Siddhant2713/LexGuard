@@ -14,6 +14,8 @@ export type ChatItem =
 
 interface ChatPanelProps {
   sessionId: string
+  /** Shared reports: clause cards only, no questions. */
+  readOnly?: boolean
   items: ChatItem[]
   setItems: React.Dispatch<React.SetStateAction<ChatItem[]>>
   /** Opening message, first line. */
@@ -27,7 +29,7 @@ const SUGGESTIONS = ["Can they own code I write at home?", "What if I quit after
 
 const eyebrow = (color: string): React.CSSProperties => ({ font: "500 11px var(--mono)", letterSpacing: ".06em", color, marginBottom: 4 })
 
-export default function ChatPanel({ sessionId, items, setItems, summary, analyses, headings, onCite }: ChatPanelProps) {
+export default function ChatPanel({ sessionId, readOnly, items, setItems, summary, analyses, headings, onCite }: ChatPanelProps) {
   const [draft, setDraft] = useState("")
   const [streaming, setStreaming] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -98,7 +100,7 @@ export default function ChatPanel({ sessionId, items, setItems, summary, analyse
                 <LogoMark size={26} compact />
                 <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 10, fontSize: 15, lineHeight: 1.6 }}>
                   <div>{summary}</div>
-                  <div style={{ color: "var(--t1)" }}>Pick a flag on the left to see what it means, or ask me anything.</div>
+                  <div style={{ color: "var(--t1)" }}>{readOnly ? "Pick a flag on the left to see what it means." : "Pick a flag on the left to see what it means, or ask me anything."}</div>
                 </div>
               </div>
             )
@@ -154,7 +156,7 @@ export default function ChatPanel({ sessionId, items, setItems, summary, analyse
         })}
       </div>
 
-      <div style={{ padding: "12px clamp(16px,2vw,28px) clamp(16px,2vw,24px)", display: "flex", flexDirection: "column", gap: 10 }}>
+      {!readOnly && <div style={{ padding: "12px clamp(16px,2vw,28px) clamp(16px,2vw,24px)", display: "flex", flexDirection: "column", gap: 10 }}>
         {showSuggestions && (
           <div style={{ display: "flex", gap: 8, overflowX: "auto", scrollbarWidth: "none" }}>
             {SUGGESTIONS.map((q) => (
@@ -186,7 +188,7 @@ export default function ChatPanel({ sessionId, items, setItems, summary, analyse
             </svg>
           </button>
         </div>
-      </div>
+      </div>}
     </aside>
   )
 }

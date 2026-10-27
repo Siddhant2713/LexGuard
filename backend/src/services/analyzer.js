@@ -62,11 +62,15 @@ async function mapWithConcurrency(items, limit, fn) {
   return results;
 }
 
-export async function runPass2(pass1) {
+// onProgress(done, total) fires as each clause finishes, for the progress screen.
+export async function runPass2(pass1, onProgress = () => {}) {
   const clauses = pass1.clauses.slice(0, config.maxClausesPass2);
-  const results = await mapWithConcurrency(clauses, config.pass2Concurrency, (c) =>
-    analyzeClause(c, pass1.document_type),
-  );
+  let done = 0;
+  const results = await mapWithConcurrency(clauses, config.pass2Concurrency, async (c) => {
+    const result = await analyzeClause(c, pass1.document_type);
+    onProgress(++done, clauses.length);
+    return result;
+  });
   const valid = results.filter(Boolean);
   if (valid.length < results.length) {
     console.error(`Pass 2: ${results.length - valid.length}/${results.length} clause analyses failed`);
@@ -84,6 +88,7 @@ export async function runAggregation(riskReport, documentType) {
     system: aggregationSystem,
     user: aggregationUser({ document_type: documentType, clauses_json: JSON.stringify(summary, null, 2) }),
     maxTokens: config.maxTokens.aggregation,
+    model: config.groqAggregationModel,
   });
   const parsed = AggregationResult.safeParse(data);
   if (!parsed.success) throw new Error(`Aggregation schema validation failed: ${parsed.error.message}`);

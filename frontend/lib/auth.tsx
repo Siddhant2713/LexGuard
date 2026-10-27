@@ -11,6 +11,8 @@ interface AuthState {
   login: (email: string, password: string) => Promise<void>
   register: (name: string, email: string, password: string) => Promise<void>
   logout: () => Promise<void>
+  /** Replaces the user, e.g. with the one returned after a payment. Re-fetches when omitted. */
+  refresh: (next?: User) => Promise<void>
 }
 
 const AuthContext = createContext<AuthState | null>(null)
@@ -37,8 +39,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null)
   }, [])
 
+  const refresh = useCallback(async (next?: User) => {
+    setUser(next ?? (await api.getMe()))
+  }, [])
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, refresh }}>
       {children}
     </AuthContext.Provider>
   )
@@ -50,12 +56,24 @@ export function useAuth(): AuthState {
   return ctx
 }
 
-/** For protected pages: redirects to /login when signed out. `user` is null until resolved. */
+/** For protected pages: redirects to /login when signed out, and back here after signing in. */
 export function useRequireAuth() {
   const auth = useAuth()
   const router = useRouter()
   useEffect(() => {
-    if (!auth.loading && !auth.user) router.replace("/login")
+    if (!auth.loading && !auth.user) {
+      const here = window.location.pathname + window.location.search
+      router.replace(`/login?next=${encodeURIComponent(here)}`)
+    }
   }, [auth.loading, auth.user, router])
   return auth
+}
+
+/**
+ * Where to go after signing in: the `?next=` path when it's a same-site path, else /new.
+ * Rejects `//host` and `/\host`, which browsers treat as another origin.
+ */
+export function nextPath(): string {
+  const next = new URLSearchParams(window.location.search).get("next") ?? ""
+  return /^\/(?![\/\\])/.test(next) ? next : "/new"
 }

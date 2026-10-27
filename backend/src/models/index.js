@@ -17,9 +17,14 @@ const sessionSchema = new Schema(
     risk_report: { type: [Mixed], default: [] },
     aggregation: { type: Mixed, default: null },
     summary: { type: Mixed, default: {} },
+    // Pass 2 progress while /analyze runs, polled by the progress screen.
+    analysis_progress: { type: Mixed, default: null },
+    // Set while the report is shared. Anyone holding it can read the report (not the chat).
+    share_token: { type: String, default: undefined },
   },
   { timestamps: true, minimize: false },
 );
+sessionSchema.index({ share_token: 1 }, { unique: true, sparse: true });
 
 const chunkSchema = new Schema({
   // Denormalized owner (same as the parent session's) so queries can be scoped without a join.
@@ -46,6 +51,46 @@ const chatMessageSchema = new Schema(
 
 chatMessageSchema.index({ user_id: 1, session_id: 1, createdAt: -1 });
 
+// One row per Razorpay order. Status only moves forward: created → paid → refunded.
+const paymentSchema = new Schema(
+  {
+    user_id: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    order_id: { type: String, required: true, unique: true },
+    payment_id: { type: String, default: null },
+    amount: { type: Number, required: true }, // paise
+    currency: { type: String, required: true },
+    days: { type: Number, required: true },
+    status: { type: String, enum: ["created", "paid", "refunded"], default: "created" },
+    paid_at: { type: Date, default: null },
+    method: { type: String, default: null },
+  },
+  { timestamps: true },
+);
+
+// Free-plan upload counter per calendar month (UTC). Kept apart from sessions so deleting a
+// contract doesn't hand the upload back.
+const usageSchema = new Schema({
+  user_id: { type: Schema.Types.ObjectId, ref: "User", required: true },
+  period: { type: String, required: true }, // "2026-10"
+  uploads: { type: Number, default: 0 },
+});
+usageSchema.index({ user_id: 1, period: 1 }, { unique: true });
+
+const comparisonSchema = new Schema(
+  {
+    comparison_id: { type: String, required: true, unique: true },
+    user_id: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    base_session_id: { type: String, required: true },
+    revised_session_id: { type: String, required: true },
+    result: { type: Mixed, required: true },
+  },
+  { timestamps: true, minimize: false },
+);
+comparisonSchema.index({ user_id: 1, base_session_id: 1, revised_session_id: 1 }, { unique: true });
+
 export const Session = model("Session", sessionSchema);
 export const Chunk = model("Chunk", chunkSchema);
 export const ChatMessage = model("ChatMessage", chatMessageSchema);
+export const Payment = model("Payment", paymentSchema);
+export const Usage = model("Usage", usageSchema);
+export const Comparison = model("Comparison", comparisonSchema);

@@ -88,3 +88,14 @@ export function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean)
   return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase()
 }
+
+/** 49900, "INR" → "₹499". Amounts from the API are in the smallest unit (paise). */
+export function formatMoney(amount: number, currency: string): string {
+  const value = amount / 100
+  return new Intl.NumberFormat("en-IN", { style: "currency", currency, maximumFractionDigits: Number.isInteger(value) ? 0 : 2 }).format(value)
+}
+
+/** Whole days from now until `iso`, never negative. */
+export function daysUntil(iso: string): number {
+  return Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000))
+}

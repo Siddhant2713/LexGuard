@@ -1,9 +1,13 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { uploadContract } from "@/lib/api"
+import { getBilling, needsPro, uploadContract } from "@/lib/api"
+import { useAuth } from "@/lib/auth"
+import { formatDate } from "@/lib/utils"
 import AppShell from "@/components/AppShell"
+import type { BillingStatus } from "@/lib/types"
 
 const MAX_BYTES = 20 * 1024 * 1024
 
@@ -38,11 +42,20 @@ function PagePreview({ scanning }: { scanning?: boolean }) {
 }
 
 export default function NewAnalysisPage() {
+  const { user } = useAuth()
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [dragging, setDragging] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Free plan only: this month's allowance. The API enforces it; this just shows it.
+  const [usage, setUsage] = useState<BillingStatus["usage"]>(null)
+
+  useEffect(() => {
+    if (user?.plan === "free") getBilling().then((b) => setUsage(b.usage)).catch(() => {})
+  }, [user])
+
+  const outOfUploads = usage ? usage.used >= usage.limit : false
 
   async function handleFile(f: File) {
     const lower = f.name.toLowerCase()
@@ -61,6 +74,12 @@ export default function NewAnalysisPage() {
       router.push(`/analyze/${result.session_id}`)
     } catch (err) {
       setFile(null)
+      if (needsPro(err)) {
+        // The allowance ran out (perhaps in another tab): show the upgrade card.
+        setUsage((u) => (u ? { ...u, used: u.limit } : u))
+        if (!usage) router.push("/billing?feature=uploads")
+        return
+      }
       setError((err as Error).message || "Upload failed. Please try again.")
     }
   }
@@ -76,7 +95,20 @@ export default function NewAnalysisPage() {
             </p>
           </div>
 
-          {file ? (
+          {outOfUploads && usage && !file ? (
+            <div style={{ ...card, border: "1.5px solid var(--bd1)" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 22, minWidth: 0, flex: "1 1 320px" }}>
+                <div style={{ fontFamily: "var(--serif)", fontSize: "clamp(30px,3.4vw,44px)", lineHeight: 1.02, letterSpacing: "-0.03em" }}>
+                  You’ve used this month’s {usage.limit} free contracts
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 14 }}>
+                  <Link href="/billing?feature=uploads" className="lg-btn-acc" style={{ font: "500 15px var(--sans)", background: "var(--acc)", color: "var(--onacc)", padding: "13px 22px", borderRadius: 999, whiteSpace: "nowrap" }}>Get Pro for unlimited</Link>
+                  <span style={{ font: "400 13px var(--mono)", color: "var(--t2)" }}>Free resets {formatDate(usage.resets_at)}</span>
+                </div>
+              </div>
+              <PagePreview />
+            </div>
+          ) : file ? (
             <div style={{ ...card, border: "1.5px solid var(--acc)" }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0, flex: "1 1 320px" }}>
                 <div style={{ font: "400 15px var(--mono)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{file.name}</div>
@@ -109,7 +141,9 @@ export default function NewAnalysisPage() {
                 <div style={{ fontFamily: "var(--serif)", fontSize: "clamp(30px,3.4vw,44px)", lineHeight: 1.02, letterSpacing: "-0.03em" }}>Drop a PDF or Word file here</div>
                 <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 14 }}>
                   <span style={{ font: "500 15px var(--sans)", background: "var(--t0)", color: "var(--bg0)", padding: "13px 22px", borderRadius: 999, whiteSpace: "nowrap" }}>Choose file</span>
-                  <span style={{ font: "400 13px var(--mono)", color: "var(--t2)" }}>Up to 20 MB</span>
+                  <span style={{ font: "400 13px var(--mono)", color: "var(--t2)" }}>
+                    Up to 20 MB{usage && ` · ${usage.limit - usage.used} of ${usage.limit} free left this month`}
+                  </span>
                 </div>
               </div>
               <PagePreview />

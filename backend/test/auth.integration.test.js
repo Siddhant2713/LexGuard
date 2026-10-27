@@ -132,6 +132,9 @@ test("users only see their own contracts; others get 404", { skip }, async () =>
   assert.equal((await eve("/report/sess-alice")).res.status, 404);
   assert.equal((await eve("/chat/sess-alice/history")).res.status, 404);
   assert.equal((await eve("/analyze?session_id=sess-alice", { method: "POST" })).res.status, 404);
+  assert.equal((await eve("/analyze/progress?session_id=sess-alice")).res.status, 404);
+  await Session.updateOne({ session_id: "sess-alice" }, { analysis_progress: { done: 3, total: 10 } });
+  assert.deepEqual((await alice("/analyze/progress?session_id=sess-alice")).json, { analyzed: false, progress: { done: 3, total: 10 } });
   assert.equal((await eve("/chat", { method: "POST", body: { session_id: "sess-alice", query: "hi" } })).res.status, 404);
 });
 

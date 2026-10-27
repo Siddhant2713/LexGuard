@@ -42,9 +42,14 @@ export const config = {
 
   groqModel: env.GROQ_MODEL || "openai/gpt-oss-120b",
   groqChatModel: env.GROQ_CHAT_MODEL || "openai/gpt-oss-20b",
+  // Pass 3 only summarizes Pass 2's output. Groq budgets tokens per model, so running it on a
+  // different model than Pass 2 means it doesn't queue behind Pass 2's token usage.
+  groqAggregationModel: env.GROQ_AGGREGATION_MODEL || env.GROQ_CHAT_MODEL || "openai/gpt-oss-20b",
 
   // gpt-oss models spend part of this budget on reasoning, so keep headroom above the JSON size.
-  maxTokens: { pass1: 3000, pass2: 1200, aggregation: 1000, chat: 1024 },
+  maxTokens: { pass1: 3000, pass2: 1200, aggregation: 1000, chat: 1024, compare: 1800 },
+  // Changes sent to the model per comparison; the diff itself always covers every clause.
+  maxCompareChanges: 12,
   reasoningEffort: env.GROQ_REASONING_EFFORT || "low",
   // Groq's free tier allows 8000 tokens/min per model; requested max_tokens count against it.
   tpmLimit: Number(env.GROQ_TPM || 8000),
@@ -55,5 +60,16 @@ export const config = {
   // alongside the output budget; raise it (with GROQ_TPM) on a paid tier.
   maxContextChars: Number(env.MAX_CONTEXT_CHARS || 16_000),
   maxUploadBytes: 20 * 1024 * 1024,
+
+  // ─── Plans & billing ───────────────────────────────────────────────────────
+  // Live keys from Razorpay Dashboard → Account & Settings → API Keys.
+  get razorpayKeyId() { return required("RAZORPAY_KEY_ID"); },
+  get razorpayKeySecret() { return required("RAZORPAY_KEY_SECRET"); },
+  // A secret you choose when adding the webhook (Dashboard → Webhooks) for POST /billing/webhook.
+  // Optional: without it the webhook is disabled and payments are confirmed by /billing/verify alone.
+  razorpayWebhookSecret: env.RAZORPAY_WEBHOOK_SECRET || null,
+  // Pro is a one-time pass: this amount (in paise) buys `days` of Pro, stacked on any time left.
+  pro: { amount: 49_900, currency: "INR", days: 30 },
+  freeUploadsPerMonth: 3,
   retryDelaysMs: [5000, 15000, 30000],
 };

@@ -33,7 +33,7 @@ export async function* streamChat(userId, sessionId, query) {
 
   try {
     const system = chatSystem({ retrieved_context: buildContext(chunks) });
-    await reserveTokens(config.groqChatModel, system.length + query.length, config.maxTokens.chat);
+    const budget = await reserveTokens(config.groqChatModel, system.length + query.length, config.maxTokens.chat);
     const stream = await getGroq().chat.completions.create({
       model: config.groqChatModel,
       messages: [
@@ -48,6 +48,8 @@ export async function* streamChat(userId, sessionId, query) {
     for await (const part of stream) {
       const text = part.choices[0]?.delta?.content;
       if (text) yield text;
+      // Groq reports usage on the final chunk.
+      budget.settle(part.x_groq?.usage?.total_tokens);
     }
   } catch (err) {
     console.error(`Chat streaming error for session ${sessionId}: ${err.message}`);

@@ -17,6 +17,10 @@ export interface DashboardProps {
   riskReport: RiskAnalysis[]
   aggregation: AggregationResult
   summary: Record<Severity, number>
+  /** Renders the export layout that window.print() uses (Pro). */
+  printable?: boolean
+  /** Shared reports: no chat composer, nothing that calls the owner-only API. */
+  readOnly?: boolean
 }
 
 const legendSwatch: Record<Severity, React.CSSProperties> = {
@@ -29,7 +33,7 @@ const legendSwatch: Record<Severity, React.CSSProperties> = {
 const sectionLabel = (color: string): React.CSSProperties => ({ font: "500 11px var(--mono)", letterSpacing: ".06em", color, marginBottom: 4 })
 
 export default function Dashboard(props: DashboardProps) {
-  const { sessionId, filename, documentType, parties, governingLaw, clauses, riskReport, aggregation, summary } = props
+  const { sessionId, filename, documentType, parties, governingLaw, clauses, riskReport, aggregation, summary, printable, readOnly } = props
   const docRef = useRef<HTMLElement>(null)
   const [sel, setSel] = useState<string | null>(null)
   const [flash, setFlash] = useState(0)
@@ -151,12 +155,12 @@ export default function Dashboard(props: DashboardProps) {
         </section>
 
         <ErrorBoundary>
-          <ChatPanel sessionId={sessionId} items={items} setItems={setItems} summary={opening} analyses={analyses} headings={headings} onCite={(id) => pickClause(id, true)} />
+          <ChatPanel sessionId={sessionId} readOnly={readOnly} items={items} setItems={setItems} summary={opening} analyses={analyses} headings={headings} onCite={(id) => pickClause(id, true)} />
         </ErrorBoundary>
       </main>
 
       {/* ── Export: what window.print() renders ── */}
-      <div className="lg-print-only" style={{ padding: "0 8px", color: "var(--t0)" }}>
+      {printable && <div className="lg-print-only" style={{ padding: "0 8px", color: "var(--t0)" }}>
         <div style={{ font: "400 11px var(--mono)", color: "var(--t2)" }}>LexGuard report · {filename}</div>
         <h1 style={{ margin: "12px 0 4px", fontFamily: "var(--serif)", fontWeight: 400, fontSize: 34, letterSpacing: "-0.025em" }}>{title}</h1>
         <div style={{ font: "400 12px var(--mono)", color: "var(--t2)" }}>{meta}</div>
@@ -175,7 +179,7 @@ export default function Dashboard(props: DashboardProps) {
           </div>
         ))}
         <p style={{ marginTop: 24, fontSize: 11, color: "var(--t2)" }}>LexGuard is not a law firm and does not give legal advice.</p>
-      </div>
+      </div>}
     </>
   )
 }

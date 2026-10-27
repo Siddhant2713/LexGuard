@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useAuth } from "@/lib/auth"
+import { nextPath, useAuth } from "@/lib/auth"
 import { Logo, ThemeToggle } from "@/components/brand"
 
 type Mode = "login" | "register"
@@ -47,9 +47,12 @@ export default function AuthForm({ mode }: { mode: Mode }) {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const isRegister = mode === "register"
+  // Keeps ?next= when switching between sign in and register. Read after mount to match SSR.
+  const [carry, setCarry] = useState("")
+  useEffect(() => setCarry(window.location.search), [])
 
   useEffect(() => {
-    if (user) router.replace("/new")
+    if (user) router.replace(nextPath())
   }, [user, router])
 
   async function onSubmit(e: React.FormEvent) {
@@ -124,7 +127,7 @@ export default function AuthForm({ mode }: { mode: Mode }) {
             </button>
             <div style={{ fontSize: 14, color: "var(--t1)", textAlign: "center", marginTop: 8 }}>
               {isRegister ? "Already have an account?" : "New to LexGuard?"}{" "}
-              <Link href={isRegister ? "/login" : "/register"} style={{ color: "var(--t0)", fontWeight: 500, borderBottom: "1px solid var(--acc)" }}>
+              <Link href={(isRegister ? "/login" : "/register") + carry} style={{ color: "var(--t0)", fontWeight: 500, borderBottom: "1px solid var(--acc)" }}>
                 {isRegister ? "Sign in" : "Create an account"}
               </Link>
             </div>

@@ -4,15 +4,15 @@ import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useRequireAuth } from "@/lib/auth"
-import { initials } from "@/lib/utils"
-import { Logo, ThemeToggle } from "@/components/brand"
+import { formatDate, initials } from "@/lib/utils"
+import { Logo, ProTag, ThemeToggle } from "@/components/brand"
 
 interface AppShellProps {
   children: React.ReactNode
   /** Dashboard only: shown as a breadcrumb after the nav. */
   filename?: string
-  /** Dashboard only: shows the Export button. */
-  onExport?: () => void
+  /** Header buttons before the theme toggle (the dashboard's Export and Share). */
+  actions?: React.ReactNode
 }
 
 const pill = (active: boolean): React.CSSProperties => ({
@@ -23,7 +23,7 @@ const pill = (active: boolean): React.CSSProperties => ({
 })
 
 /** Header + full-height body for every signed-in page. Renders nothing until the session is known. */
-export default function AppShell({ children, filename, onExport }: AppShellProps) {
+export default function AppShell({ children, filename, actions }: AppShellProps) {
   const { user, logout } = useRequireAuth()
   const router = useRouter()
   const pathname = usePathname()
@@ -58,6 +58,7 @@ export default function AppShell({ children, filename, onExport }: AppShellProps
         <nav style={{ display: "flex", gap: 2, fontSize: 14, flex: "none", whiteSpace: "nowrap" }}>
           <Link href="/new" style={pill(pathname === "/new")}>New analysis</Link>
           <Link href="/contracts" style={pill(pathname === "/contracts")}>Contracts</Link>
+          <Link href="/compare" style={pill(pathname.startsWith("/compare"))}>Compare</Link>
         </nav>
         {filename && (
           <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, flex: 1 }}>
@@ -68,15 +69,7 @@ export default function AppShell({ children, filename, onExport }: AppShellProps
           </div>
         )}
         <div style={{ flex: 1 }} />
-        {onExport && (
-          <button
-            type="button"
-            onClick={onExport}
-            style={{ font: "500 13px var(--sans)", background: "var(--bg2)", border: 0, color: "var(--t0)", padding: "8px 14px", borderRadius: 999, cursor: "pointer", whiteSpace: "nowrap", flex: "none" }}
-          >
-            Export
-          </button>
-        )}
+        {actions}
         <ThemeToggle size={34} />
         <div ref={menuRef} style={{ position: "relative", flex: "none" }}>
           <button
@@ -91,11 +84,20 @@ export default function AppShell({ children, filename, onExport }: AppShellProps
           {menuOpen && (
             <div style={{ position: "absolute", right: 0, top: 44, width: 230, background: "var(--bg0)", borderRadius: 14, boxShadow: "var(--sh)", padding: 6, zIndex: 30 }}>
               <div style={{ padding: 12, marginBottom: 4 }}>
-                <div style={{ fontSize: 14, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis" }}>{user.name}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 14, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.name}</span>
+                  {user.plan === "pro" && <ProTag />}
+                </div>
                 <div style={{ fontSize: 12, color: "var(--t2)", overflow: "hidden", textOverflow: "ellipsis" }}>{user.email}</div>
               </div>
               <Link href="/contracts" className="lg-menuitem" onClick={() => setMenuOpen(false)} style={{ display: "block", padding: "9px 12px", fontSize: 14, borderRadius: 9, color: "var(--t0)" }}>
                 Contracts
+              </Link>
+              <Link href="/billing" className="lg-menuitem" onClick={() => setMenuOpen(false)} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, padding: "9px 12px", fontSize: 14, borderRadius: 9, color: "var(--t0)" }}>
+                <span>Plan &amp; billing</span>
+                <span style={{ fontSize: 12, color: "var(--t2)", whiteSpace: "nowrap" }}>
+                  {user.plan === "pro" && user.pro_until ? `Pro to ${formatDate(user.pro_until).replace(/, \d{4}$/, "")}` : "Free"}
+                </span>
               </Link>
               <button type="button" className="lg-menuitem" onClick={signOut} style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 12px", fontSize: 14, borderRadius: 9, border: 0, background: "transparent", color: "var(--t0)", cursor: "pointer" }}>
                 Sign out

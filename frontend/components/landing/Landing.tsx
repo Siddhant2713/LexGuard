@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { Logo, LogoMark, ThemeToggle } from "@/components/brand"
+import { FREE_FEATURES, PRO_DAYS, PRO_FEATURES, PRO_PRICE } from "@/lib/plans"
 
 const MARQUEE = ["Offer letters", "Leases", "Freelance agreements", "NDAs", "Terms of service", "Contractor agreements"]
 
@@ -12,6 +13,7 @@ const FAQS = [
   { q: "Which files can I upload?", a: "PDF and Word (DOCX) files up to 20 MB." },
   { q: "How long does it take?", a: "Most contracts are done in under a minute." },
   { q: "Who can see my contract?", a: "Only you. Files are encrypted, never used to train AI models, and you can delete a contract and its report at any time." },
+  { q: "How does Pro billing work?", a: `Pro is a one-time payment of ${PRO_PRICE} for ${PRO_DAYS} days, paid through Razorpay with UPI, cards or netbanking. Nothing renews on its own. Buy again before it ends and the new days are added on top.` },
 ]
 
 const QUOTES = [
@@ -287,8 +289,8 @@ export default function Landing() {
         <div style={wrap}>
           <h2 style={{ ...h2, marginBottom: "clamp(40px,5vw,72px)" }}>Pricing</h2>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,360px),1fr))", gap: "clamp(32px,5vw,80px)" }}>
-            <Plan name="Free" price="$0" rule="var(--t0)" features={["3 contracts a month", "Every clause rated and explained", "Ask questions about your contract"]} cta="Start free" ctaBg="var(--bg2)" ctaColor="var(--t0)" />
-            <Plan name="Pro" price="$15" per="/ month" rule="var(--acc)" features={["Unlimited contracts", "Export and share reports", "Compare two versions of a contract"]} cta="Get Pro" ctaBg="var(--acc)" ctaColor="var(--onacc)" />
+            <Plan name="Free" price="₹0" rule="var(--t0)" features={FREE_FEATURES} cta="Start free" href="/register" ctaBg="var(--bg2)" ctaColor="var(--t0)" />
+            <Plan name="Pro" price={PRO_PRICE} per="/ month" rule="var(--acc)" features={PRO_FEATURES} cta="Get Pro" href="/register?next=/billing" ctaBg="var(--acc)" ctaColor="var(--onacc)" />
           </div>
         </div>
       </section>
@@ -333,7 +335,7 @@ export default function Landing() {
   )
 }
 
-function Plan({ name, price, per, rule, features, cta, ctaBg, ctaColor }: { name: string; price: string; per?: string; rule: string; features: string[]; cta: string; ctaBg: string; ctaColor: string }) {
+function Plan({ name, price, per, rule, features, cta, href, ctaBg, ctaColor }: { name: string; price: string; per?: string; rule: string; features: string[]; cta: string; href: string; ctaBg: string; ctaColor: string }) {
   const priceStyle: React.CSSProperties = { fontFamily: serif, fontSize: "clamp(56px,6vw,88px)", lineHeight: 0.9, letterSpacing: "-0.04em" }
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 28, borderTop: `2px solid ${rule}`, paddingTop: 28 }}>
@@ -351,7 +353,7 @@ function Plan({ name, price, per, rule, features, cta, ctaBg, ctaColor }: { name
       <div style={{ display: "flex", flexDirection: "column", fontSize: 16, color: "var(--t1)" }}>
         {features.map((f) => <span key={f} style={{ padding: "12px 0", borderBottom: "1px solid var(--bd0)" }}>{f}</span>)}
       </div>
-      <Link href="/register" style={{ ...pillBtn(ctaBg, ctaColor, "14px 26px", 15), alignSelf: "flex-start" }}>{cta}</Link>
+      <Link href={href} style={{ ...pillBtn(ctaBg, ctaColor, "14px 26px", 15), alignSelf: "flex-start" }}>{cta}</Link>
     </div>
   )
 }

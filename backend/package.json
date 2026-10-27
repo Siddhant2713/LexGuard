@@ -9,7 +9,8 @@
   "scripts": {
     "dev": "node --watch index.js",
     "start": "node index.js",
-    "test": "node --test test/"
+    "test": "node --test test/",
+    "grant-pro": "node scripts/grant-pro.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

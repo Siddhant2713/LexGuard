@@ -4,6 +4,11 @@ import type {
   ReportResponse,
   User,
   ContractSummary,
+  BillingStatus,
+  CheckoutOrder,
+  Comparison,
+  ComparisonSummary,
+  SharedReport,
 } from "./types"
 
 const API_URL =
@@ -14,10 +19,14 @@ const API_URL =
 // `credentials: "include"`. The token is never visible to JavaScript.
 
 export class ApiError extends Error {
-  constructor(message: string, public status: number) {
+  /** `code` is set for plan errors: "PRO_REQUIRED" or "QUOTA_EXCEEDED" (both 402). */
+  constructor(message: string, public status: number, public code?: string) {
     super(message)
   }
 }
+
+/** True when the API refused because the feature or allowance needs Pro. */
+export const needsPro = (err: unknown) => err instanceof ApiError && err.status === 402 && !!err.code
 
 async function authRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
@@ -26,7 +35,7 @@ async function authRequest<T>(path: string, init: RequestInit = {}): Promise<T> 
     headers: { "Content-Type": "application/json", ...init.headers },
   })
   const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new ApiError(data.detail || "Request failed", res.status)
+  if (!res.ok) throw new ApiError(data.detail || "Request failed", res.status, data.code)
   return data as T
 }
 
@@ -60,6 +69,51 @@ export const listContracts = () =>
 export const deleteContract = (sessionId: string) =>
   authRequest<{ ok: boolean }>(`/contracts/${encodeURIComponent(sessionId)}`, { method: "DELETE" })
 
+// ─── Billing ───────────────────────────────────────────────────────────────
+
+export const getBilling = () => authRequest<BillingStatus>("/billing")
+
+export const createOrder = () => authRequest<CheckoutOrder>("/billing/order", { method: "POST" })
+
+export interface PaymentConfirmation {
+  razorpay_order_id: string
+  razorpay_payment_id: string
+  razorpay_signature: string
+}
+
+/** Sends Checkout's success payload to the API, which checks it with Razorpay before granting Pro. */
+export const verifyPayment = (confirmation: PaymentConfirmation) =>
+  authRequest<{ user: User }>("/billing/verify", { method: "POST", body: JSON.stringify(confirmation) }).then((r) => r.user)
+
+// ─── Sharing ───────────────────────────────────────────────────────────────
+
+export const shareContract = (sessionId: string) =>
+  authRequest<{ share_token: string }>(`/contracts/${encodeURIComponent(sessionId)}/share`, { method: "POST" }).then((r) => r.share_token)
+
+export const unshareContract = (sessionId: string) =>
+  authRequest<{ ok: boolean }>(`/contracts/${encodeURIComponent(sessionId)}/share`, { method: "DELETE" })
+
+/** Public: no session needed. Null when the link is unknown or no longer active. */
+export async function getSharedReport(token: string): Promise<SharedReport | null> {
+  const res = await fetch(`${API_URL}/shared/${encodeURIComponent(token)}`)
+  if (res.status === 404) return null
+  if (!res.ok) throw new Error("Could not load this report")
+  return res.json()
+}
+
+// ─── Compare ───────────────────────────────────────────────────────────────
+
+export const compareContracts = (baseSessionId: string, revisedSessionId: string) =>
+  authRequest<{ comparison_id: string }>("/compare", {
+    method: "POST",
+    body: JSON.stringify({ base_session_id: baseSessionId, revised_session_id: revisedSessionId }),
+  }).then((r) => r.comparison_id)
+
+export const getComparison = (id: string) => authRequest<Comparison>(`/compare/${encodeURIComponent(id)}`)
+
+export const listComparisons = () =>
+  authRequest<{ comparisons: ComparisonSummary[] }>("/comparisons").then((r) => r.comparisons)
+
 // ─── Upload ────────────────────────────────────────────────────────────────
 
 export async function uploadContract(file: File): Promise<UploadResponse> {
@@ -74,7 +128,7 @@ export async function uploadContract(file: File): Promise<UploadResponse> {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: "Upload failed" }))
-    throw new Error(err.detail || "Upload failed")
+    throw new ApiError(err.detail || "Upload failed", res.status, err.code)
   }
 
   return res.json()
@@ -97,6 +151,15 @@ export async function analyzeContract(
 
   return res.json()
 }
+
+export interface AnalyzeProgress {
+  analyzed: boolean
+  /** Clauses Pass 2 has finished, out of the ones it analyzes. Null before it starts. */
+  progress: { done: number; total: number } | null
+}
+
+export const getAnalyzeProgress = (sessionId: string) =>
+  authRequest<AnalyzeProgress>(`/analyze/progress?session_id=${encodeURIComponent(sessionId)}`)
 
 // ─── Report ────────────────────────────────────────────────────────────────
 

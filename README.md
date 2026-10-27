@@ -11,7 +11,7 @@ Requires Node 20+, a MongoDB instance (local or Atlas), and a [Groq API key](htt
 ```bash
 # Backend (http://localhost:8000)
 cd backend
-cp .env.example .env      # fill in MONGODB_URI, GROQ_API_KEY and JWT_SECRET
+cp .env.example .env      # fill in MONGODB_URI, GROQ_API_KEY, JWT_SECRET and the RAZORPAY_* keys
 npm install
 npm run dev
 
@@ -45,10 +45,36 @@ Users register and sign in (`/register`, `/login`); each contract belongs to the
 | `POST` | `/chat` | SSE chat |
 | `GET` | `/report/:sessionId` | Saved report |
 | `GET` | `/chat/:sessionId/history` | Chat history |
+| `GET` | `/billing` | Plan, free allowance, payment history |
+| `POST` | `/billing/order` | Create a Razorpay order for Pro |
+| `POST` | `/billing/verify` | Confirm a Checkout payment |
+| `POST` | `/billing/webhook` | Razorpay webhook (signed, no auth) |
+| `POST` / `DELETE` | `/contracts/:sessionId/share` | Create / revoke a share link (Pro) |
+| `GET` | `/shared/:token` | Public read-only report |
+| `POST` | `/compare` | Compare two analyzed contracts (Pro) |
+| `GET` | `/compare/:id`, `/comparisons` | A comparison / past comparisons (Pro) |
 
 ### MongoDB collections
 
-`sessions` (metadata + Pass 1/2/3 results), `chunks` (clause text, text-indexed), `chatmessages`.
+`sessions` (metadata + Pass 1/2/3 results), `chunks` (clause text, text-indexed), `chatmessages`, `payments`, `usages` (free uploads per month), `comparisons`.
+
+## Plans & payments
+
+| | Free | Pro (₹499 for 30 days) |
+| :--- | :--- | :--- |
+| Contracts | 3 per calendar month (UTC) | Unlimited |
+| Clause analysis, chat | ✓ | ✓ |
+| Export (print/PDF), share links | | ✓ |
+| Compare two versions | | ✓ |
+
+Pro is a **one-time Razorpay payment**, not a subscription: each purchase adds 30 days on top of whatever time is left, and nothing renews on its own. Limits are enforced by the API (`backend/src/services/plans.js`, `middleware/plan.js`). Pro-only routes answer `402` with `code: "PRO_REQUIRED"`, and an exhausted free allowance answers `402` with `code: "QUOTA_EXCEEDED"`.
+
+Flow: `POST /billing/order` (the server sets the amount) → Razorpay Checkout → `POST /billing/verify` checks the signature, re-reads the payment from Razorpay (amount, currency, order), captures it if it's only authorized, and grants Pro. The webhook does the same, so a payment still counts if the browser closes mid-flow. Granting is idempotent: the order id is recorded in the same atomic update that extends `pro_until`. A full refund (`refund.processed`) takes back that order's days. Share links stop working while the owner isn't on Pro.
+
+**Razorpay setup (live):**
+1. Dashboard → Account & Settings → API Keys: put the key id and secret in `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET`.
+2. Dashboard → Webhooks → Add: URL `https://<api-host>/billing/webhook`, events `payment.authorized`, `payment.captured`, `order.paid`, `refund.processed`, and a secret, which goes in `RAZORPAY_WEBHOOK_SECRET`.
+3. The frontend CSP already allows Checkout (`next.config.js`).
 
 ## Auth
 

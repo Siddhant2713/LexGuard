@@ -55,3 +55,42 @@ export const ChatRequest = z.object({
   session_id: z.string().min(1),
   query: z.string().min(1).max(2000),
 });
+
+// ─── Billing / compare ───────────────────────────────────────────────────────
+
+// What Razorpay Checkout hands the browser on success. Shapes are pinned so nothing but plain
+// ids reaches a query.
+export const VerifyPaymentInput = z
+  .object({
+    razorpay_order_id: z.string().regex(/^order_[A-Za-z0-9]{6,40}$/),
+    razorpay_payment_id: z.string().regex(/^pay_[A-Za-z0-9]{6,40}$/),
+    razorpay_signature: z.string().regex(/^[a-f0-9]{64}$/),
+  })
+  .strict();
+
+const sessionId = z.string().uuid();
+
+export const CompareInput = z
+  .object({ base_session_id: sessionId, revised_session_id: sessionId })
+  .strict()
+  .refine((v) => v.base_session_id !== v.revised_session_id, "Pick two different contracts.");
+
+export const ComparisonVerdict = z.object({
+  verdict: z.preprocess(
+    (v) => (["better", "worse", "mixed", "same"].includes(String(v).toLowerCase()) ? String(v).toLowerCase() : "mixed"),
+    z.enum(["better", "worse", "mixed", "same"]),
+  ),
+  summary: z.string(),
+  changes: z
+    .array(
+      z.object({
+        key: z.string(),
+        impact: z.preprocess(
+          (v) => (["better", "worse", "neutral"].includes(String(v).toLowerCase()) ? String(v).toLowerCase() : "neutral"),
+          z.enum(["better", "worse", "neutral"]),
+        ),
+        note: z.string(),
+      }),
+    )
+    .default([]),
+});

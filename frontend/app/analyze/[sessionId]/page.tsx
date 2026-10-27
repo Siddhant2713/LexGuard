@@ -3,12 +3,13 @@
 import { useEffect, useRef, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import type { AggregationResult, RawClause, RiskAnalysis, Severity } from "@/lib/types"
-import { analyzeContract, getReport } from "@/lib/api"
+import { analyzeContract, getAnalyzeProgress, getReport } from "@/lib/api"
 import { useAuth } from "@/lib/auth"
 import { inDocumentOrder } from "@/lib/utils"
 import AppShell from "@/components/AppShell"
 import Analyzing from "@/components/analysis/Analyzing"
 import Dashboard from "@/components/dashboard/Dashboard"
+import ReportActions from "@/components/dashboard/ReportActions"
 
 type Phase = "loading" | "analyzing" | "dashboard" | "error"
 
@@ -18,6 +19,7 @@ interface Doc {
   parties: string[]
   governingLaw: string | null
   clauses: RawClause[]
+  shareToken: string | null
 }
 
 interface Result {
@@ -26,9 +28,9 @@ interface Result {
   summary: Record<Severity, number>
 }
 
-// The backend answers /analyze once, when every clause is done, so progress is paced to
-// roughly match it (about 4s per clause, PASS2_CONCURRENCY=3) and holds on the last clause.
-const TICK_MS = 2000
+// /analyze answers once, when everything is done; meanwhile the API records how many clauses
+// Pass 2 has finished, and this page polls it.
+const POLL_MS = 1000
 
 export default function AnalyzePage() {
   const { user } = useAuth()
@@ -62,6 +64,7 @@ export default function AnalyzePage() {
           parties: report.pass1_result.parties ?? [],
           governingLaw: report.pass1_result.governing_law,
           clauses,
+          shareToken: report.share_token,
         })
 
         if (report.risk_report.length > 0 && report.aggregation) {
@@ -71,7 +74,18 @@ export default function AnalyzePage() {
         }
 
         setPhase("analyzing")
-        interval = setInterval(() => setProgress((p) => Math.min(p + 1, clauses.length - 1)), TICK_MS)
+        // Pass 2 analyzes a subset of the clauses shown, so scale its count onto the list. The
+        // bar never moves backwards, and "Preparing your report" waits for the real answer.
+        interval = setInterval(() => {
+          getAnalyzeProgress(sessionId)
+            .then(({ progress: p }) => {
+              if (!p || !p.total) return
+              // All clauses done: show "Preparing your report" while the summary is written.
+              const shown = p.done >= p.total ? clauses.length : Math.min(Math.round((p.done / p.total) * clauses.length), clauses.length - 1)
+              setProgress((prev) => Math.max(prev, shown))
+            })
+            .catch(() => {})
+        }, POLL_MS)
         const analyzed = await analyzeContract(sessionId)
         clearInterval(interval)
         setProgress(clauses.length)
@@ -86,9 +100,13 @@ export default function AnalyzePage() {
   }, [user, sessionId])
 
   const ready = phase === "dashboard" && doc && result
+  const isPro = user?.plan === "pro"
 
   return (
-    <AppShell filename={ready ? doc.filename : undefined} onExport={ready ? () => window.print() : undefined}>
+    <AppShell
+      filename={ready ? doc.filename : undefined}
+      actions={ready ? <ReportActions sessionId={sessionId} isPro={isPro} shareToken={doc.shareToken} /> : undefined}
+    >
       {phase === "analyzing" && doc && (
         <Analyzing filename={doc.filename} documentType={doc.documentType} parties={doc.parties} clauses={doc.clauses} progress={progress} />
       )}
@@ -104,6 +122,7 @@ export default function AnalyzePage() {
           riskReport={result.riskReport}
           aggregation={result.aggregation}
           summary={result.summary}
+          printable={isPro}
         />
       )}
 

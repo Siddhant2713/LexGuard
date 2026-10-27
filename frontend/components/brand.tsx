@@ -57,3 +57,12 @@ export function ThemeToggle({ size = 36 }: { size?: number }) {
     </button>
   )
 }
+
+/** The small accent "Pro" mark on plan badges and on buttons for Pro-only features. */
+export function ProTag({ style }: { style?: React.CSSProperties }) {
+  return (
+    <span style={{ font: "500 10px/1 var(--sans)", letterSpacing: ".02em", background: "var(--acc)", color: "var(--onacc)", padding: "3px 7px", borderRadius: 999, flex: "none", ...style }}>
+      Pro
+    </span>
+  )
+}
