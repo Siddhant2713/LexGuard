@@ -3,7 +3,12 @@
 // Production: "/api", proxied to the Render API by the rewrite below (so the session cookie is
 // first-party). Local dev: the API directly.
 const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
-const apiOrigin = process.env.API_ORIGIN
+// Only scheme + host: a trailing slash or path in the variable would reach the API as "//health"
+// or "/api/health", which it answers with 401 instead of the route.
+const rawApiOrigin = process.env.API_ORIGIN?.trim()
+const apiOrigin = rawApiOrigin
+  ? new URL(/^https?:\/\//.test(rawApiOrigin) ? rawApiOrigin : `https://${rawApiOrigin}`).origin
+  : undefined
 
 // Razorpay Checkout loads its script, opens its payment form in an iframe, and reports
 // telemetry; these are the origins it needs.
